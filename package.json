@@ -1,0 +1,20 @@
+{
+  "name": "maestro-workspace",
+  "version": "1.0.0",
+  "description": "Workspace do projeto Maestro - Frontend Angular + Backend API",
+  "scripts": {
+    "start": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
+    "start:backend": "cd backend && npm run dev",
+    "start:frontend": "cd maestro && npm start",
+    "dev": "npm start",
+    "install:all": "npm install && cd backend && npm install && cd ../maestro && npm install",
+    "setup:db": "cd backend && npm run setup-db",
+    "create:test-user": "cd backend && npm run create-test-user"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0"
+  }
+}

@@ -1,0 +1,56 @@
+<aside class="sidebar" [class.collapsed]="isCollapsed">
+  <!-- Logo e Toggle -->
+  <div class="sidebar-header">
+    <div class="logo-container" *ngIf="!isCollapsed">
+      <img src="maestro_withe.png" alt="Maestro Logo" class="logo-icon" />
+      <h1 class="logo-text">Maestro</h1>
+    </div>
+    
+    <button class="toggle-btn" (click)="toggleSidebar()" [title]="isCollapsed ? 'Expandir menu' : 'Recolher menu'">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+      </svg>
+    </button>
+  </div>
+
+  <!-- Menu de Navegação -->
+  <nav class="sidebar-nav">
+    <ul class="menu-list">
+      <li *ngFor="let item of menuItems" class="menu-item">
+        <a 
+          [routerLink]="item.route" 
+          routerLinkActive="active"
+          class="menu-link"
+          [title]="isCollapsed ? item.label : ''"
+        >
+          <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" [attr.d]="item.icon" />
+          </svg>
+          <span class="menu-label" *ngIf="!isCollapsed">{{ item.label }}</span>
+        </a>
+      </li>
+    </ul>
+  </nav>
+
+  <!-- Rodapé com Usuário e Logout -->
+  <div class="sidebar-footer">
+    <div class="user-info" *ngIf="currentUser$ | async as user">
+      <div class="user-avatar">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+        </svg>
+      </div>
+      <div class="user-details" *ngIf="!isCollapsed">
+        <p class="user-name">{{ user.name }}</p>
+        <p class="user-email">{{ user.email }}</p>
+      </div>
+    </div>
+    
+    <button class="logout-btn" (click)="onLogout()" [title]="isCollapsed ? 'Sair' : ''">
+      <svg class="logout-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+      </svg>
+      <span *ngIf="!isCollapsed">Sair</span>
+    </button>
+  </div>
+</aside>
