@@ -15,6 +15,7 @@ import JSZip from 'jszip';
 export class OrdensProducaoComponent implements OnInit {
   showReprogramModal = false;
   showPrintModal = false;
+  showAlterarDatasModal = false;
   idsInput = '';
   dateInput = '';
   isProcessing = false;
@@ -30,6 +31,18 @@ export class OrdensProducaoComponent implements OnInit {
   isSearchingFiles = false;
   downloadProgress = 0;
   totalFilesToDownload = 0;
+  
+  // Propriedades para alterar datas individuais
+  issuesSemData: Array<{
+    key: string;
+    resumo: string | number;
+    status: string;
+    situacao: string;
+    veiculo: string;
+    previsao: string;
+    novaData: string;
+  }> = [];
+  isLoadingIssues = false;
   
   private readonly feedbackDelayMs = 3000;
   private readonly requestTimeoutMs = 60000; // 1 minuto (otimizado)
@@ -51,15 +64,18 @@ export class OrdensProducaoComponent implements OnInit {
       } else if (this.showPrintModal) {
         this.closePrintModal();
         event.preventDefault();
+      } else if (this.showAlterarDatasModal) {
+        this.closeAlterarDatasModal();
+        event.preventDefault();
       }
     }
     
     // ENTER confirma o botão principal se disponível
     if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.altKey) {
-      // Verificar se não está em um textarea
+      // Verificar se não está em um textarea ou input de data
       const target = event.target as HTMLElement;
-      if (target.tagName === 'TEXTAREA') {
-        return; // Permitir ENTER normal em textarea
+      if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT') {
+        return; // Permitir ENTER normal em textarea e inputs
       }
       
       if (this.showReprogramModal && !this.isProcessing && this.parsedIdsCount > 0 && this.canReprogramWithDate()) {
@@ -67,6 +83,9 @@ export class OrdensProducaoComponent implements OnInit {
         event.preventDefault();
       } else if (this.showPrintModal && !this.isProcessing && this.parsedPrintIdsCount > 0) {
         this.buscarEBaixarPdfs();
+        event.preventDefault();
+      } else if (this.showAlterarDatasModal && !this.isProcessing) {
+        this.salvarDatasIndividuais();
         event.preventDefault();
       }
     }
@@ -79,6 +98,8 @@ export class OrdensProducaoComponent implements OnInit {
       this.openReprogramModal();
     } else if (routineName === 'imprimir-ops') {
       this.openPrintModal();
+    } else if (routineName === 'alterar-datas') {
+      this.openAlterarDatasModal();
     } else {
       // TODO: Implementar outras rotinas
       alert(`Rotina "${routineName}" em desenvolvimento`);
@@ -117,6 +138,166 @@ export class OrdensProducaoComponent implements OnInit {
     this.showPrintModal = false;
     this.isProcessing = false;
     this.clearProcessingGuard();
+  }
+
+  openAlterarDatasModal(): void {
+    this.showAlterarDatasModal = true;
+    this.issuesSemData = [];
+    this.resultMessage = 'Carregando...';
+    this.resultType = '';
+    this.isLoadingIssues = true;
+    
+    // Buscar todas as issues (não apenas sem data) após o modal estar renderizado
+    setTimeout(() => {
+      this.buscarIssuesSemData();
+    }, 100);
+  }
+
+  closeAlterarDatasModal(): void {
+    this.showAlterarDatasModal = false;
+    this.isProcessing = false;
+    this.clearProcessingGuard();
+  }
+
+  buscarIssuesSemData(): void {
+    this.isLoadingIssues = true;
+    this.resultMessage = 'Buscando cartões do relatório Jira...';
+    this.resultType = '';
+
+    this.jiraService.getJiraIssues(false) // false = todos os itens (mesmo JQL do relatório)
+      .pipe(
+        timeout(this.requestTimeoutMs),
+        take(1),
+        finalize(() => {
+          this.isLoadingIssues = false;
+        })
+      )
+      .subscribe({
+        next: (response: any) => {
+          if (response.success && response.data && response.data.length > 0) {
+            this.issuesSemData = response.data.map((issue: any) => ({
+              key: issue.key,
+              resumo: issue.resumo,
+              status: issue.status,
+              situacao: issue.situacao,
+              veiculo: issue.veiculo,
+              previsao: issue.previsao || '',
+              novaData: ''
+            }));
+            this.resultMessage = `${this.issuesSemData.length} cartões encontrados`;
+            this.resultType = 'success';
+          } else {
+            this.issuesSemData = [];
+            this.resultMessage = 'Nenhum cartão encontrado';
+            this.resultType = 'error';
+          }
+        },
+        error: (error) => {
+          this.issuesSemData = [];
+          this.resultType = 'error';
+          if (error?.name === 'TimeoutError') {
+            this.resultMessage = `Tempo limite excedido (${this.requestTimeoutMs / 1000}s). Tente novamente.`;
+          } else {
+            this.resultMessage = error.error?.message || 'Erro ao buscar cartões';
+          }
+        }
+      });
+  }
+
+  salvarDatasIndividuais(): void {
+    // Filtrar apenas issues com data preenchida
+    const updates = this.issuesSemData
+      .filter(issue => issue.novaData && issue.novaData.length === 10)
+      .map(issue => ({
+        id: issue.key,
+        date: this.convertDateToISO(issue.novaData)
+      }));
+
+    if (updates.length === 0) {
+      this.resultType = 'error';
+      this.resultMessage = 'Nenhuma data válida preenchida para salvar';
+      return;
+    }
+
+    this.isProcessing = true;
+    this.resultMessage = `Salvando ${updates.length} data(s)...`;
+    this.resultType = '';
+
+    this.jiraService.atualizarDatasIndividuais(updates)
+      .pipe(
+        timeout(this.requestTimeoutMs * 2), // Mais tempo para múltiplas atualizações
+        take(1),
+        finalize(() => {
+          this.isProcessing = false;
+        })
+      )
+      .subscribe({
+        next: (response: any) => {
+          if (response.success) {
+            this.resultType = 'success';
+            this.resultMessage = `✓ ${response.data.successCount} data(s) atualizada(s) com sucesso!`;
+            
+            // Atualizar lista removendo as que foram salvas com sucesso
+            const successIds = response.data.results
+              .filter((r: any) => r.success)
+              .map((r: any) => r.id);
+            
+            this.issuesSemData = this.issuesSemData.filter(
+              issue => !successIds.includes(issue.key)
+            );
+            
+            if (this.issuesSemData.length === 0) {
+              // Fechar modal após sucesso total
+              setTimeout(() => {
+                this.closeAlterarDatasModal();
+              }, 2000);
+            }
+          } else {
+            this.resultType = 'error';
+            this.resultMessage = response.message || 'Erro ao salvar datas';
+          }
+        },
+        error: (error) => {
+          this.resultType = 'error';
+          if (error?.name === 'TimeoutError') {
+            this.resultMessage = `Tempo limite excedido. Tente novamente.`;
+          } else {
+            this.resultMessage = error.error?.message || 'Erro ao salvar datas';
+          }
+        }
+      });
+  }
+
+  private convertDateToISO(dateStr: string): string {
+    // Converter DD/MM/YYYY para YYYY-MM-DD
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+    return dateStr;
+  }
+
+  aplicarMascaraData(event: Event, issue: any): void {
+    const input = event.target as HTMLInputElement;
+    let value = input.value.replace(/\D/g, ''); // Remove tudo que não é dígito
+    
+    if (value.length > 8) {
+      value = value.substring(0, 8);
+    }
+    
+    let formatted = '';
+    if (value.length > 0) {
+      formatted = value.substring(0, 2);
+      if (value.length >= 3) {
+        formatted += '/' + value.substring(2, 4);
+      }
+      if (value.length >= 5) {
+        formatted += '/' + value.substring(4, 8);
+      }
+    }
+    
+    issue.novaData = formatted;
+    input.value = formatted;
   }
 
   onPrintIdsInput(): void {

@@ -193,8 +193,16 @@ export const getJiraIssues = async (req, res) => {
       });
     }
 
-    // Filtro JQL
-    const jql = '(project = MANTA AND status IN ("A Produzir", "Liberado Engenharia")) OR (project = TENSYLON AND status IN ("A Produzir", "Liberado Engenharia", "Aguardando Acabamento", "Aguardando Autoclave", "Aguardando Corte", "Aguardando montagem"))';
+    // Verificar se deve filtrar apenas issues sem data de previsão
+    const semData = req.query.semData === 'true';
+
+    // Filtro JQL base
+    let jql = '(project = MANTA AND status IN ("A Produzir", "Liberado Engenharia")) OR (project = TENSYLON AND status IN ("A Produzir", "Liberado Engenharia", "Aguardando Acabamento", "Aguardando Autoclave", "Aguardando Corte", "Aguardando montagem"))';
+    
+    // Adicionar filtro de data vazia se solicitado
+    if (semData) {
+      jql = `(${jql}) AND customfield_10245 is EMPTY`;
+    }
 
     const url = `${jiraUrl}/rest/api/3/search/jql`;
     const auth = Buffer.from(`${email}:${apiToken}`).toString('base64');
@@ -203,6 +211,7 @@ export const getJiraIssues = async (req, res) => {
     console.log('📧 Email:', email);
     console.log('🔑 Token presente:', !!apiToken);
     console.log('🔍 JQL:', jql);
+    console.log('📅 Filtro sem data:', semData);
 
     const situacoesValidas = [
       '⚪️RECEBIDO ENCAMINHADO',
@@ -705,6 +714,166 @@ export const reprogramarEmMassa = async (req, res) => {
     const errorResponse = {
       success: false,
       message: 'Erro ao reprogramar issues: ' + error.message
+    };
+    
+    console.log('📤 [ERROR] Enviando resposta de erro...');
+    res.status(500).json(errorResponse);
+    console.log('📤 [ERROR] Resposta de erro enviada');
+  }
+};
+
+/**
+ * Atualiza datas de previsão individuais para múltiplos cards
+ * Cada card pode ter uma data diferente
+ */
+export const atualizarDatasIndividuais = async (req, res) => {
+  console.log('🎯 ============================================');
+  console.log('🎯 ENDPOINT /atualizar-datas-individuais INICIADO');
+  console.log('🎯 ============================================');
+  
+  try {
+    console.log('🚀 Iniciando atualização de datas individuais...');
+
+    const JIRA_UPDATE_TIMEOUT_MS = 45000; // 45 segundos por card
+
+    const { updates } = req.body;
+    
+    console.log('📦 Body recebido:', { updates });
+
+    // Validar formato: [{id: "CARD-123", date: "2024-03-15"}, ...]
+    if (!updates || !Array.isArray(updates) || updates.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Lista de updates é obrigatória e deve ser um array não vazio com formato [{id, date}, ...]'
+      });
+    }
+
+    const jiraUrl = process.env.JIRA_URL;
+    const email = process.env.JIRA_EMAIL;
+    const apiToken = process.env.JIRA_API_TOKEN;
+    const campoPrevisao = 'customfield_10245';
+
+    if (!jiraUrl || !email || !apiToken) {
+      console.error('❌ Credenciais do Jira não configuradas');
+      return res.status(500).json({
+        success: false,
+        message: 'Credenciais do Jira não configuradas no servidor'
+      });
+    }
+
+    const auth = Buffer.from(`${email}:${apiToken}`).toString('base64');
+
+    console.log('📋 Updates para processar:', updates.length);
+    updates.forEach(update => console.log(`   • ${update.id} → ${update.date || '(LIMPAR)'}`));
+
+    let successCount = 0;
+    let errorCount = 0;
+    const results = [];
+
+    // Atualizar cada issue individualmente
+    for (const update of updates) {
+      const { id: issueId, date: dateValue } = update;
+      
+      if (!issueId) {
+        console.log(`⚠️ Update sem ID, pulando:`, update);
+        errorCount++;
+        results.push({
+          id: 'UNKNOWN',
+          success: false,
+          message: 'ID não fornecido'
+        });
+        continue;
+      }
+
+      try {
+        console.log(`🔄 Processando ${issueId} → ${dateValue || '(limpar)'}...`);
+        const url = `${jiraUrl}/rest/api/3/issue/${issueId}`;
+        
+        const response = await axios.put(
+          url,
+          {
+            fields: {
+              [campoPrevisao]: dateValue || null
+            }
+          },
+          {
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'Authorization': `Basic ${auth}`
+            },
+            timeout: JIRA_UPDATE_TIMEOUT_MS
+          }
+        );
+
+        if (response.status === 204 || response.status === 200) {
+          successCount++;
+          const msg = dateValue ? `atualizado para ${dateValue}` : 'data limpa';
+          console.log(`✅ ${issueId} ${msg}`);
+          results.push({
+            id: issueId,
+            success: true,
+            message: dateValue ? `Atualizado para ${dateValue}` : 'Data limpa'
+          });
+        } else {
+          errorCount++;
+          console.log(`❌ ${issueId} falhou (${response.status})`);
+          results.push({
+            id: issueId,
+            success: false,
+            message: `Falhou com status ${response.status}`
+          });
+        }
+      } catch (error) {
+        errorCount++;
+        const errorMessage =
+          error.code === 'ECONNABORTED'
+            ? `Timeout ao atualizar issue após ${JIRA_UPDATE_TIMEOUT_MS / 1000}s`
+            : (error.response?.data?.errorMessages?.join(', ') || error.message);
+        console.log(`❌ ${issueId} erro: ${errorMessage}`);
+        results.push({
+          id: issueId,
+          success: false,
+          message: errorMessage
+        });
+      }
+    }
+
+    console.log('='.repeat(60));
+    console.log('ATUALIZAÇÃO DE DATAS INDIVIDUAIS FINALIZADA');
+    console.log(`✅ Sucesso: ${successCount}`);
+    console.log(`❌ Erros: ${errorCount}`);
+    console.log('='.repeat(60));
+
+    const responseData = {
+      success: true,
+      message: `Atualização concluída: ${successCount} sucesso, ${errorCount} erros`,
+      data: {
+        successCount,
+        errorCount,
+        total: updates.length,
+        results
+      }
+    };
+
+    console.log('📤 [RESPONSE] Preparando resposta...');
+    console.log('📦 [RESPONSE] Dados:', JSON.stringify(responseData, null, 2));
+    console.log('📡 [RESPONSE] Enviando HTTP 200...');
+    
+    res.status(200).json(responseData);
+    
+    console.log('✅ [RESPONSE] Resposta enviada com sucesso ao cliente!');
+    console.log('🎯 ============================================');
+    console.log('🎯 ENDPOINT /atualizar-datas-individuais FINALIZADO');
+    console.log('🎯 ============================================');
+
+  } catch (error) {
+    console.error('❌ [ERROR] Erro na atualização de datas individuais:', error);
+    console.error('❌ [ERROR] Stack:', error.stack);
+    
+    const errorResponse = {
+      success: false,
+      message: 'Erro ao atualizar datas: ' + error.message
     };
     
     console.log('📤 [ERROR] Enviando resposta de erro...');

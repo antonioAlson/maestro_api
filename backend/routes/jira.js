@@ -3,6 +3,7 @@ import {
   getJiraIssues, 
   getContecIssues, 
   reprogramarEmMassa,
+  atualizarDatasIndividuais,
   buscarArquivosPorIds,
   downloadArquivo,
   downloadArquivoJira
@@ -19,6 +20,9 @@ router.get('/contec', authenticate, getContecIssues);
 
 // Reprogramar múltiplas issues em massa
 router.post('/reprogramar-massa', authenticate, reprogramarEmMassa);
+
+// Atualizar datas individuais (cada issue com data diferente)
+router.post('/atualizar-datas-individuais', authenticate, atualizarDatasIndividuais);
 
 // Buscar arquivos por IDs
 router.post('/buscar-arquivos', authenticate, buscarArquivosPorIds);

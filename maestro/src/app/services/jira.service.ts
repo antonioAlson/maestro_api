@@ -287,6 +287,51 @@ export class JiraService {
   }
 
   /**
+   * Busca issues do Jira
+   * @param semData - Se true, retorna apenas issues sem data de previsão
+   */
+  getJiraIssues(semData: boolean = false): Observable<any> {
+    console.log('🔍 [JiraService] getJiraIssues iniciado');
+    console.log('📅 Filtro sem data:', semData);
+    const url = `${this.apiUrl}/jira/issues${semData ? '?semData=true' : ''}`;
+    console.log('🌐 URL:', url);
+
+    return this.http.get<any>(url).pipe(
+      tap({
+        next: (response) => {
+          console.log('📥 [JiraService] Issues recebidas:', response?.data?.length || 0);
+        },
+        error: (error) => {
+          console.error('❌ [JiraService] Erro ao buscar issues:', error);
+        }
+      })
+    );
+  }
+
+  /**
+   * Atualiza datas individuais para múltiplas issues
+   * @param updates - Array de {id: string, date: string}
+   */
+  atualizarDatasIndividuais(updates: Array<{id: string, date: string}>): Observable<any> {
+    console.log('🔄 [JiraService] atualizarDatasIndividuais iniciado');
+    console.log('📋 Updates:', updates.length);
+    console.log('🌐 URL:', `${this.apiUrl}/jira/atualizar-datas-individuais`);
+
+    return this.http.post<any>(`${this.apiUrl}/jira/atualizar-datas-individuais`, { updates }).pipe(
+      tap({
+        next: (response) => {
+          console.log('📥 [JiraService] Resposta recebida:', response);
+          console.log('📊 [JiraService] Sucesso:', response?.data?.successCount || 0);
+          console.log('📊 [JiraService] Erros:', response?.data?.errorCount || 0);
+        },
+        error: (error) => {
+          console.error('❌ [JiraService] Erro na atualização:', error);
+        }
+      })
+    );
+  }
+
+  /**
    * Busca arquivos por IDs dos cards
    */
   buscarArquivosPorIds(ids: string[]): Observable<any> {
