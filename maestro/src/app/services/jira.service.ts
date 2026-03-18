@@ -1,0 +1,258 @@
+import { Injectable } from '@angular/core';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { Observable, switchMap, from } from 'rxjs';
+import { environment } from '../../environments/environment';
+import * as ExcelJS from 'exceljs';
+
+interface BackendJiraResponse {
+  success: boolean;
+  total: number;
+  filtered: number;
+  data: Array<{
+    key: string;
+    resumo: number;
+    status: string;
+    situacao: string;
+    veiculo: string;
+    previsao: string;
+  }>;
+}
+
+interface ExportRow {
+  ID: string;
+  Resumo: number;
+  Status: string;
+  SITUAÇÃO: string;
+  Veículo: string;
+  'DT. PREVISÃO ENTREGA': string;
+}
+
+@Injectable({
+  providedIn: 'root'
+})
+export class JiraService {
+  private apiUrl = environment.apiUrl;
+
+  constructor(private http: HttpClient) {}
+
+
+  /**
+   * Gera arquivo Excel e faz download
+   */
+  private async generateExcel(data: ExportRow[], filename?: string): Promise<void> {
+    console.log('📊 [JiraService] Gerando arquivo Excel...');
+    
+    // Criar workbook e worksheet
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Jira Cards');
+
+    // Definir colunas com larguras
+    worksheet.columns = [
+      { header: 'ID', key: 'ID', width: 12 },
+      { header: 'Resumo', key: 'Resumo', width: 15 },
+      { header: 'Status', key: 'Status', width: 20 },
+      { header: 'SITUAÇÃO', key: 'SITUAÇÃO', width: 25 },
+      { header: 'Veículo', key: 'Veículo', width: 20 },
+      { header: 'DT. PREVISÃO ENTREGA', key: 'DT. PREVISÃO ENTREGA', width: 18 }
+    ];
+
+    // Adicionar dados
+    data.forEach(row => {
+      worksheet.addRow(row);
+    });
+
+    // Estilizar header (linha 1)
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFD3D3D3' } // Cinza claro
+    };
+
+    // Marcas que devem ter destaque
+    const marcasDestaque = ['land rover', 'toyota', 'jaguar'];
+
+    // Aplicar formatação condicional
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return; // Pular header
+
+      // Coluna Veículo (E) - Formatação condicional
+      const veiculoCell = row.getCell(5);
+      const veiculoValue = (veiculoCell.value as string || '').toLowerCase();
+
+      // Verificar se contém alguma das marcas
+      const contemMarca = marcasDestaque.some(marca => veiculoValue.includes(marca));
+
+      if (contemMarca) {
+        veiculoCell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFF6B6B' } // Vermelho claro
+        };
+        veiculoCell.font = {
+          color: { argb: 'FFFFFFFF' }, // Branco
+          bold: true
+        };
+      }
+    });
+
+    // Auto-ajustar largura das colunas baseado no conteúdo
+    worksheet.columns.forEach((column) => {
+      let maxLength = 0;
+      
+      column.eachCell?.({ includeEmpty: true }, (cell) => {
+        const cellValue = cell.value ? cell.value.toString() : '';
+        maxLength = Math.max(maxLength, cellValue.length);
+      });
+      
+      // Adicionar margem extra e definir largura (mínimo 10, máximo 50)
+      column.width = Math.min(Math.max(maxLength + 2, 10), 50);
+    });
+
+    // Gerar nome do arquivo com timestamp
+    const now = new Date();
+    const timestamp = now.toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).replace(/[/:]/g, '.').replace(', ', ' ');
+    
+    const finalFilename = filename || `jira_cards ${timestamp}.xlsx`;
+
+    // Gerar buffer e fazer download
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = finalFilename;
+    link.click();
+    window.URL.revokeObjectURL(url);
+    
+    console.log('✅ [JiraService] Excel gerado:', finalFilename);
+  }
+
+  /**
+   * Método principal para exportar relatório - chama o backend
+   */
+  exportJiraReport(): Observable<{ success: boolean; message: string; count: number }> {
+    console.log('🎯 [JiraService] exportJiraReport iniciado');
+    console.log('📡 Chamando backend:', `${this.apiUrl}/jira/issues`);
+    
+    // Buscar token do localStorage
+    const token = localStorage.getItem('token');
+    const headers = new HttpHeaders({
+      'Authorization': `Bearer ${token}`
+    });
+
+    return this.http.get<BackendJiraResponse>(`${this.apiUrl}/jira/issues`, { headers }).pipe(
+      switchMap((response) => {
+        console.log('📥 [JiraService] Resposta do backend:', {
+          success: response.success,
+          total: response.total,
+          filtered: response.filtered,
+          dataLength: response.data?.length || 0
+        });
+
+        if (!response.success || !response.data || response.data.length === 0) {
+          console.warn('⚠️ Nenhuma issue encontrada');
+          return from([{
+            success: false,
+            message: 'Nenhum cartão encontrado com os critérios especificados',
+            count: 0
+          }]);
+        }
+
+        // Converter dados do backend para formato do Excel
+        const excelData: ExportRow[] = response.data.map(item => ({
+          ID: item.key,
+          Resumo: item.resumo,
+          Status: item.status,
+          SITUAÇÃO: item.situacao,
+          Veículo: item.veiculo,
+          'DT. PREVISÃO ENTREGA': item.previsao
+        }));
+
+        console.log(`✅ [JiraService] ${excelData.length} issues processadas`);
+        
+        // Gerar Excel (async) e converter Promise em Observable
+        return from(
+          this.generateExcel(excelData).then(() => ({
+            success: true,
+            message: `Relatório gerado com sucesso! ${excelData.length} cartões exportados.`,
+            count: excelData.length
+          }))
+        );
+      })
+    );
+  }
+
+  /**
+   * Método para exportar relatório CONTEC - apenas marcas Land Rover, Toyota e Jaguar
+   */
+  exportContecReport(): Observable<{ success: boolean; message: string; count: number }> {
+    console.log('🎯 [JiraService] exportContecReport iniciado');
+    console.log('📡 Chamando backend:', `${this.apiUrl}/jira/contec`);
+    
+    // Buscar token do localStorage
+    const token = localStorage.getItem('token');
+    const headers = new HttpHeaders({
+      'Authorization': `Bearer ${token}`
+    });
+
+    return this.http.get<BackendJiraResponse>(`${this.apiUrl}/jira/contec`, { headers }).pipe(
+      switchMap((response) => {
+        console.log('📥 [JiraService] Resposta do backend CONTEC:', {
+          success: response.success,
+          total: response.total,
+          filtered: response.filtered,
+          dataLength: response.data?.length || 0
+        });
+
+        if (!response.success || !response.data || response.data.length === 0) {
+          console.warn('⚠️ Nenhuma issue CONTEC encontrada');
+          return from([{
+            success: false,
+            message: 'Nenhum cartão CONTEC encontrado',
+            count: 0
+          }]);
+        }
+
+        // Converter dados do backend para formato do Excel
+        const excelData: ExportRow[] = response.data.map(item => ({
+          ID: item.key,
+          Resumo: item.resumo,
+          Status: item.status,
+          SITUAÇÃO: item.situacao,
+          Veículo: item.veiculo,
+          'DT. PREVISÃO ENTREGA': item.previsao
+        }));
+
+        console.log(`✅ [JiraService] ${excelData.length} issues CONTEC processadas`);
+        
+        // Gerar nome do arquivo CONTEC
+        const now = new Date();
+        const timestamp = now.toLocaleString('pt-BR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        }).replace(/[/:]/g, '.').replace(', ', ' ');
+        
+        const filename = `carros_contec ${timestamp}.xlsx`;
+        
+        // Gerar Excel (async) e converter Promise em Observable
+        return from(
+          this.generateExcel(excelData, filename).then(() => ({
+            success: true,
+            message: `Relatório CONTEC gerado com sucesso! ${excelData.length} cartões exportados.`,
+            count: excelData.length
+          }))
+        );
+      })
+    );
+  }
+}

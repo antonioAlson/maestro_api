@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth.js';
+import jiraRoutes from './routes/jira.js';
 
 // Carregar variáveis de ambiente
 dotenv.config();
@@ -37,6 +38,7 @@ app.get('/', (req, res) => {
 
 // Rotas da API
 app.use('/api/auth', authRoutes);
+app.use('/api/jira', jiraRoutes);
 
 // Rota 404
 app.use((req, res) => {
