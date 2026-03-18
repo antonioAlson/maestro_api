@@ -25,6 +25,10 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/ordens-producao/ordens-producao.component').then(m => m.OrdensProducaoComponent)
       },
       {
+        path: 'pcp/relatorios',
+        loadComponent: () => import('./pages/relatorios-pcp/relatorios-pcp.component').then(m => m.RelatoriosPcpComponent)
+      },
+      {
         path: 'users',
         loadComponent: () => import('./pages/dashboard/dashboard.component').then(m => m.HomeComponent)
       },
