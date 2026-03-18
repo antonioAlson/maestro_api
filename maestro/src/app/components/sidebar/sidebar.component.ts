@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Output } from '@angular/core';
+import { Component, EventEmitter, Output, ElementRef, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
@@ -6,8 +6,9 @@ import { AuthService } from '../../services/auth.service';
 interface MenuItem {
   icon: string;
   label: string;
-  route: string;
+  route?: string;
   active?: boolean;
+  children?: MenuItem[];
 }
 
 @Component({
@@ -22,12 +23,44 @@ export class SidebarComponent {
 
   isCollapsed = true;
   currentUser$;
+  expandedMenu: string | null = null;
 
   menuItems: MenuItem[] = [
     {
       icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
       label: 'Inicio',
       route: '/home'
+    },
+    {
+      icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01',
+      label: 'PCP',
+      children: [
+        {
+          icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+          label: 'Ordens',
+          route: '/pcp/ordens'
+        },
+        {
+          icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
+          label: 'Acompanhamento',
+          route: '/pcp/acompanhamento'
+        },
+        {
+          icon: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+          label: 'Relatórios PCP',
+          route: '/pcp/relatorios'
+        }
+      ]
+    },
+    {
+      icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z',
+      label: 'Projetos',
+      route: '/projetos'
+    },
+    {
+      icon: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z',
+      label: 'Faturamento',
+      route: '/faturamento'
     },
     {
       icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z',
@@ -48,9 +81,32 @@ export class SidebarComponent {
 
   constructor(
     private authService: AuthService,
-    private router: Router
+    private router: Router,
+    private elementRef: ElementRef
   ) {
     this.currentUser$ = this.authService.currentUser$;
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    const clickedInside = this.elementRef.nativeElement.contains(target);
+    
+    // Ignorar cliques no botão de toggle
+    const isToggleButton = target.closest('.toggle-btn');
+    if (isToggleButton) {
+      return;
+    }
+    
+    if (clickedInside && this.isCollapsed) {
+      // Clicar no sidebar fechado abre ele
+      this.isCollapsed = false;
+      this.collapsedChange.emit(this.isCollapsed);
+    } else if (!clickedInside && !this.isCollapsed) {
+      // Clicar fora do sidebar aberto fecha ele
+      this.isCollapsed = true;
+      this.collapsedChange.emit(this.isCollapsed);
+    }
   }
 
   toggleSidebar(): void {
@@ -60,6 +116,26 @@ export class SidebarComponent {
 
   isActive(route: string): boolean {
     return this.router.url === route;
+  }
+
+  toggleSubmenu(label: string, event?: MouseEvent): void {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    
+    // Se o sidebar estiver fechado, abrir primeiro
+    if (this.isCollapsed) {
+      this.isCollapsed = false;
+      this.collapsedChange.emit(this.isCollapsed);
+    }
+    
+    // Toggle do submenu
+    this.expandedMenu = this.expandedMenu === label ? null : label;
+  }
+
+  isMenuExpanded(label: string): boolean {
+    return this.expandedMenu === label;
   }
 
   onLogout(): void {

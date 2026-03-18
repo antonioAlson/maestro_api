@@ -2,9 +2,6 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 interface MonthlyOrderMetrics {
-  newOrders: number;
-  inProduction: number;
-  releasedForProduction: number;
   deliveredThisMonth: number;
 }
 
@@ -32,19 +29,13 @@ export class HomeComponent implements OnInit, OnDestroy {
   yAxisMax = 50;
   yAxisTicks: number[] = Array.from({ length: 11 }, (_, index) => this.yAxisMax - index * 5);
   metrics: MonthlyOrderMetrics = {
-    newOrders: 0,
-    inProduction: 0,
-    releasedForProduction: 0,
     deliveredThisMonth: 0
   };
-  selectedMetric: MetricKey = 'newOrders';
-  selectedMetricTitle = 'Aguardando Projeto';
+  selectedMetric: MetricKey = 'deliveredThisMonth';
+  selectedMetricTitle = 'Entregas';
   dailySeries: DailyMetricPoint[] = [];
   visibleSeries: DailyMetricPoint[] = [];
   dailyMetrics: Record<MetricKey, DailyMetricPoint[]> = {
-    newOrders: [],
-    inProduction: [],
-    releasedForProduction: [],
     deliveredThisMonth: []
   };
   chartMaxValue = 1;
@@ -67,7 +58,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.currentDayOfMonth = now.getDate();
 
     this.loadInitialDashboardMetrics();
-    this.selectMetric('newOrders', 'Aguardando Projeto');
+    this.selectMetric('deliveredThisMonth', 'Entregas');
   }
 
   ngOnDestroy(): void {
@@ -90,16 +81,10 @@ export class HomeComponent implements OnInit, OnDestroy {
   private loadInitialDashboardMetrics(): void {
     // Simulacao para visualizacao do dashboard.
     this.dailyMetrics = {
-      newOrders: this.simulateDailySeries(this.daysInMonth, 10, 30),
-      inProduction: this.simulateDailySeries(this.daysInMonth, 8, 26),
-      releasedForProduction: this.simulateDailySeries(this.daysInMonth, 6, 22),
       deliveredThisMonth: this.simulateDailySeries(this.daysInMonth, 5, 24)
     };
 
     this.metrics = {
-      newOrders: this.sumDailySeries(this.dailyMetrics.newOrders),
-      inProduction: this.sumDailySeries(this.dailyMetrics.inProduction),
-      releasedForProduction: this.sumDailySeries(this.dailyMetrics.releasedForProduction),
       deliveredThisMonth: this.sumDailySeries(this.dailyMetrics.deliveredThisMonth)
     };
   }

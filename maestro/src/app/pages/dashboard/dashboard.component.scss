@@ -17,13 +17,9 @@
 
 .header-content h1 {
   margin: 0;
-  font-size: 2rem;
-  font-weight: 700;
-  color: #1f2937;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #6b7280;
 }
 
 .header-brand {
@@ -178,6 +174,18 @@
   padding: 1rem 1.25rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   border-top: 3px solid var(--metric-color);
+  animation: chartFadeIn 0.6s ease-out;
+}
+
+@keyframes chartFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .daily-chart-card.metric-new-orders {
@@ -193,7 +201,7 @@
 }
 
 .daily-chart-card.metric-delivered {
-  --metric-color: #f57c00;
+  --metric-color: #7c3aed;
 }
 
 .daily-chart-header {
@@ -303,11 +311,30 @@
   stroke-linejoin: miter;
   stroke-linecap: butt;
   vector-effect: non-scaling-stroke;
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: drawLine 1.5s ease-out forwards;
+}
+
+@keyframes drawLine {
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 
 .area-fill {
   fill: var(--metric-color);
   opacity: 0.22;
+  animation: areaFadeIn 1s ease-out;
+}
+
+@keyframes areaFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 0.22;
+  }
 }
 
 .chart-style-switcher {
@@ -376,6 +403,18 @@
   box-shadow: 0 0 0 1px rgba(17, 24, 39, 0.3);
   z-index: 3;
   pointer-events: none;
+  animation: pointPopIn 0.4s ease-out 0.8s both;
+}
+
+@keyframes pointPopIn {
+  from {
+    transform: translate(-50%, 50%) scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, 50%) scale(1);
+    opacity: 1;
+  }
 }
 
 .bar-fill {
@@ -385,6 +424,19 @@
   position: relative;
   border-radius: 6px 6px 3px 3px;
   background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+  animation: barGrowUp 0.8s ease-out;
+  transform-origin: bottom;
+}
+
+@keyframes barGrowUp {
+  from {
+    transform: scaleY(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
 }
 
 .bar-fill.hidden-fill {
@@ -404,7 +456,7 @@
 }
 
 .bar-fill.metric-delivered {
-  background: linear-gradient(180deg, #ffb74d 0%, #f57c00 100%);
+  background: linear-gradient(180deg, #a78bfa 0%, #7c3aed 100%);
 }
 
 .day-value-tooltip {

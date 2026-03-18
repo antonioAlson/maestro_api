@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -20,7 +20,8 @@ export class LoginComponent implements OnInit {
 
   constructor(
     private authService: AuthService,
-    private router: Router
+    private router: Router,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
@@ -69,6 +70,9 @@ export class LoginComponent implements OnInit {
       },
       error: (error) => {
         console.error('❌ Erro no login:', error);
+        console.log('Status do erro:', error.status);
+        console.log('Mensagem do erro:', error.error);
+        
         this.isLoading = false;
         
         // Tratar erros
@@ -81,6 +85,12 @@ export class LoginComponent implements OnInit {
         } else {
           this.errorMessage = 'Erro ao fazer login. Tente novamente.';
         }
+        
+        console.log('Mensagem de erro definida:', this.errorMessage);
+        console.log('isLoading após erro:', this.isLoading);
+        
+        // Forçar detecção de mudanças
+        this.cdr.detectChanges();
       },
       complete: () => {
         this.isLoading = false;

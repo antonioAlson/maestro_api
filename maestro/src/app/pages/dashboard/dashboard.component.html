@@ -11,73 +11,16 @@
       <button
         type="button"
         class="stat-card"
-        [class.active]="selectedMetric === 'newOrders'"
-        (click)="selectMetric('newOrders', 'Pedidos Novos')"
-      >
-        <div class="stat-icon" style="background: #e3f2fd;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2196f3" stroke-width="2">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-            <line x1="9" y1="9" x2="15" y2="9"></line>
-            <line x1="9" y1="15" x2="15" y2="15"></line>
-          </svg>
-        </div>
-        <div class="stat-info">
-          <h3>Aguardando Projeto</h3>
-          <p class="metric-period">{{ currentMonthLabel }}:</p>
-          <p class="metric-value">{{ metrics.newOrders }}</p>
-        </div>
-      </button>
-
-      <button
-        type="button"
-        class="stat-card"
-        [class.active]="selectedMetric === 'inProduction'"
-        (click)="selectMetric('inProduction', 'Em Producao')"
+        [class.active]="selectedMetric === 'deliveredThisMonth'"
+        (click)="selectMetric('deliveredThisMonth', 'Entregas')"
       >
         <div class="stat-icon" style="background: #f3e5f5;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9c27b0" stroke-width="2">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-            <polyline points="22 4 12 14.01 9 11.01"></polyline>
-          </svg>
-        </div>
-        <div class="stat-info">
-          <h3>Projeto Liberado</h3>
-          <p class="metric-period">{{ currentMonthLabel }}:</p>
-          <p class="metric-value">{{ metrics.inProduction }}</p>
-        </div>
-      </button>
-
-      <button
-        type="button"
-        class="stat-card"
-        [class.active]="selectedMetric === 'releasedForProduction'"
-        (click)="selectMetric('releasedForProduction', 'Liberados para Producao')"
-      >
-        <div class="stat-icon" style="background: #e8f5e9;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4caf50" stroke-width="2">
-            <path d="M12 2v20M2 12h20"></path>
-          </svg>
-        </div>
-        <div class="stat-info">
-          <h3>Planejado</h3>
-          <p class="metric-period">{{ currentMonthLabel }}:</p>
-          <p class="metric-value">{{ metrics.releasedForProduction }}</p>
-        </div>
-      </button>
-
-      <button
-        type="button"
-        class="stat-card"
-        [class.active]="selectedMetric === 'deliveredThisMonth'"
-        (click)="selectMetric('deliveredThisMonth', 'Entregues no Mes')"
-      >
-        <div class="stat-icon" style="background: #fff4e5;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef6c00" stroke-width="2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2">
             <path d="M20 7L9 18l-5-5"></path>
           </svg>
         </div>
         <div class="stat-info">
-          <h3>Entregues</h3>
+          <h3>Entregas</h3>
           <p class="metric-period">{{ currentMonthLabel }}:</p>
           <p class="metric-value">{{ metrics.deliveredThisMonth }}</p>
         </div>
@@ -86,9 +29,6 @@
 
     <section
       class="daily-chart-card"
-      [class.metric-new-orders]="selectedMetric === 'newOrders'"
-      [class.metric-in-production]="selectedMetric === 'inProduction'"
-      [class.metric-released]="selectedMetric === 'releasedForProduction'"
       [class.metric-delivered]="selectedMetric === 'deliveredThisMonth'"
       *ngIf="dailySeries.length"
     >
@@ -150,37 +90,68 @@
         </div>
 
         <div class="daily-chart-plot">
+          <!-- Bars chart -->
           <div
+            *ngIf="chartStyle === 'bars'"
             class="daily-bars"
-            [class.mode-line]="chartStyle !== 'bars'"
             [style.--days]="daysInMonth"
             [style.--y-steps]="yAxisTicks.length - 1"
-          >
+            >
             <div class="day-bar" *ngFor="let point of dailySeries" [title]="'Dia ' + point.day + ': ' + point.value">
               <div class="bar-area">
                 <div
                   class="bar-fill"
-                  [class.hidden-fill]="chartStyle !== 'bars'"
-                  [class.metric-new-orders]="selectedMetric === 'newOrders'"
-                  [class.metric-in-production]="selectedMetric === 'inProduction'"
-                  [class.metric-released]="selectedMetric === 'releasedForProduction'"
                   [class.metric-delivered]="selectedMetric === 'deliveredThisMonth'"
                   [style.height.%]="getBarHeightPercent(point.value)"
                 >
                   <span class="day-value-tooltip">{{ point.value }}</span>
                 </div>
+              </div>
+              <span class="day-label">{{ point.day }}</span>
+            </div>
+          </div>
+
+          <!-- Line chart -->
+          <div
+            *ngIf="chartStyle === 'line'"
+            class="daily-bars mode-line"
+            [style.--days]="daysInMonth"
+            [style.--y-steps]="yAxisTicks.length - 1"
+            >
+            <div class="day-bar" *ngFor="let point of dailySeries" [title]="'Dia ' + point.day + ': ' + point.value">
+              <div class="bar-area">
                 <span
                   class="line-point-marker"
-                  *ngIf="chartStyle !== 'bars'"
                   [style.bottom.%]="getBarHeightPercent(point.value)"
                 ></span>
               </div>
               <span class="day-label">{{ point.day }}</span>
             </div>
 
-            <svg class="daily-line-chart" *ngIf="chartStyle !== 'bars'" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <svg class="daily-line-chart" viewBox="0 0 100 100" preserveAspectRatio="none">
+              <polyline class="line-stroke" [attr.points]="getLinePoints(visibleSeries)"></polyline>
+            </svg>
+          </div>
+
+          <!-- Area chart -->
+          <div
+            *ngIf="chartStyle === 'area'"
+            class="daily-bars mode-line"
+            [style.--days]="daysInMonth"
+            [style.--y-steps]="yAxisTicks.length - 1"
+            >
+            <div class="day-bar" *ngFor="let point of dailySeries" [title]="'Dia ' + point.day + ': ' + point.value">
+              <div class="bar-area">
+                <span
+                  class="line-point-marker"
+                  [style.bottom.%]="getBarHeightPercent(point.value)"
+                ></span>
+              </div>
+              <span class="day-label">{{ point.day }}</span>
+            </div>
+
+            <svg class="daily-line-chart" viewBox="0 0 100 100" preserveAspectRatio="none">
               <path
-                *ngIf="chartStyle === 'area'"
                 class="area-fill"
                 [attr.d]="getAreaPath(visibleSeries)"
               ></path>

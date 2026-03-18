@@ -7,8 +7,13 @@
     </div>
     
     <button class="toggle-btn" (click)="toggleSidebar()" [title]="isCollapsed ? 'Expandir menu' : 'Recolher menu'">
-      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <!-- Ícone de barras quando fechado -->
+      <svg *ngIf="isCollapsed" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+      </svg>
+      <!-- Ícone de X quando aberto -->
+      <svg *ngIf="!isCollapsed" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
       </svg>
     </button>
   </div>
@@ -17,7 +22,43 @@
   <nav class="sidebar-nav">
     <ul class="menu-list">
       <li *ngFor="let item of menuItems" class="menu-item">
+        <!-- Menu com subcategorias -->
+        <div *ngIf="item.children && item.children.length > 0" class="menu-item-container">
+          <div
+            class="menu-link"
+            [class.has-children]="true"
+            [title]="isCollapsed ? item.label : ''"
+            (click)="toggleSubmenu(item.label, $event)"
+          >
+            <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" [attr.d]="item.icon" />
+            </svg>
+            <span class="menu-label" *ngIf="!isCollapsed">{{ item.label }}</span>
+            <svg *ngIf="!isCollapsed" class="chevron-icon" [class.expanded]="isMenuExpanded(item.label)" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+          
+          <!-- Submenu -->
+          <ul class="submenu" *ngIf="!isCollapsed && isMenuExpanded(item.label)">
+            <li *ngFor="let child of item.children" class="submenu-item">
+              <a 
+                [routerLink]="child.route" 
+                routerLinkActive="active"
+                class="submenu-link"
+              >
+                <svg class="submenu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" [attr.d]="child.icon" />
+                </svg>
+                <span class="submenu-label">{{ child.label }}</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+        
+        <!-- Menu sem subcategorias -->
         <a 
+          *ngIf="!item.children || item.children.length === 0"
           [routerLink]="item.route" 
           routerLinkActive="active"
           class="menu-link"
