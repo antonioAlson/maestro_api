@@ -36,16 +36,16 @@
 
 .kanban-board {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.5rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
   height: calc(100vh - 140px);
   overflow-x: auto;
 
-  @media (max-width: 1200px) {
+  @media (max-width: 900px) {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  @media (max-width: 768px) {
+  @media (max-width: 600px) {
     grid-template-columns: 1fr;
   }
 }
@@ -55,14 +55,14 @@
   flex-direction: column;
   background: #f9fafb;
   border-radius: 0.75rem;
-  min-width: 300px;
+  min-width: 0;
   max-height: 100%;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
   animation: slideIn 0.5s ease-out backwards;
   border: 2px solid #e5e7eb;
 
-  @for $i from 1 through 3 {
+  @for $i from 1 through 4 {
     &:nth-child(#{$i}) {
       animation-delay: #{$i * 0.1}s;
     }
@@ -95,6 +95,14 @@
     
     .column-header {
       background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    }
+  }
+
+  &:nth-child(4) {
+    border-color: #a78bfa;
+    
+    .column-header {
+      background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
     }
   }
 }
@@ -133,11 +141,11 @@
 
 .column-content {
   flex: 1;
-  padding: 1rem;
+  padding: 0.75rem;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.6rem;
   min-height: 200px;
   background: white;
   border-bottom-left-radius: calc(0.75rem - 2px);
@@ -160,13 +168,17 @@
 .kanban-card {
   background: white;
   border-radius: 0.5rem;
-  padding: 0.85rem;
+  padding: 0.65rem;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
   cursor: grab;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border-left: 4px solid #e5e7eb;
   position: relative;
   overflow: hidden;
+  min-height: 140px;
+  max-height: 140px;
+  display: flex;
+  flex-direction: column;
 
   &::before {
     content: '';
@@ -207,20 +219,20 @@
 }
 
 .card-numero {
-  font-size: 1.4rem;
+  font-size: 1.2rem;
   font-weight: 800;
   color: #1f2937;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
   letter-spacing: -0.02em;
   line-height: 1;
 }
 
 .card-title {
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   font-weight: 600;
   color: #374151;
-  margin-bottom: 0.5rem;
-  line-height: 1.3;
+  margin-bottom: 0.4rem;
+  line-height: 1.2;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
@@ -231,15 +243,15 @@
 .card-status {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  margin-bottom: 0.5rem;
-  padding: 0.4rem;
+  gap: 0.35rem;
+  margin-bottom: 0.4rem;
+  padding: 0.3rem 0.4rem;
   background: #f9fafb;
-  border-radius: 0.375rem;
+  border-radius: 0.3rem;
 
   .status-indicator {
-    width: 7px;
-    height: 7px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     flex-shrink: 0;
 
@@ -259,7 +271,7 @@
   }
 
   .status-text {
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     font-weight: 500;
     color: #6b7280;
   }
@@ -269,16 +281,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 0.5rem;
+  padding-top: 0.4rem;
   border-top: 1px solid #e5e7eb;
-  margin-top: 0.35rem;
+  margin-top: auto;
 
   .card-id-badge {
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     font-weight: 700;
     color: white;
     background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-    padding: 0.3rem 0.6rem;
+    padding: 0.25rem 0.5rem;
     border-radius: 0.25rem;
     letter-spacing: 0.02em;
     box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
@@ -287,8 +299,8 @@
   .card-date {
     display: flex;
     align-items: center;
-    gap: 0.35rem;
-    font-size: 0.7rem;
+    gap: 0.3rem;
+    font-size: 0.65rem;
     color: #6b7280;
     font-weight: 500;
 

@@ -32,7 +32,7 @@
             <div class="card-title">{{ card.title }}</div>
             
             <div class="card-status">
-              <span class="status-indicator" [class]="'status-' + (card.situacao?.includes('LIBERADO') ? 'green' : card.situacao?.includes('Aguardando') ? 'gray' : 'blue')"></span>
+              <span class="status-indicator" [class]="'status-' + (card.situacao.includes('LIBERADO') ? 'green' : card.situacao.includes('Aguardando') ? 'gray' : 'blue')"></span>
               <span class="status-text">{{ card.situacao }}</span>
             </div>
             

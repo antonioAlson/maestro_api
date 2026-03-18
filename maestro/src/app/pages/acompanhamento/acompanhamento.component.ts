@@ -42,6 +42,11 @@ export class AcompanhamentoComponent implements OnInit {
       id: 'produzidos',
       title: 'Produzidos',
       cards: []
+    },
+    {
+      id: 'faturado',
+      title: 'Faturado',
+      cards: []
     }
   ];
 
@@ -150,6 +155,20 @@ export class AcompanhamentoComponent implements OnInit {
         veiculo: 'Land Rover',
         previsao: '15/03/2026',
         prioridade: 'media'
+      }
+    ];
+
+    this.columns[3].cards = [
+      {
+        id: 'MANTA-30001',
+        numero: '30123',
+        title: 'HONDA - CIVIC SEDAN 2026',
+        description: '',
+        status: 'Faturado',
+        situacao: '✅ Faturado',
+        veiculo: 'HONDA - CIVIC SEDAN',
+        previsao: '10/03/2026',
+        prioridade: 'baixa'
       }
     ];
   }
