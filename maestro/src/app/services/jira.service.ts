@@ -285,4 +285,43 @@ export class JiraService {
       })
     );
   }
+
+  /**
+   * Busca arquivos por IDs dos cards
+   */
+  buscarArquivosPorIds(ids: string[]): Observable<any> {
+    console.log('🔍 [JiraService] buscarArquivosPorIds iniciado');
+    console.log('📋 IDs:', ids);
+    console.log('🌐 URL:', `${this.apiUrl}/jira/buscar-arquivos`);
+
+    return this.http.post<any>(`${this.apiUrl}/jira/buscar-arquivos`, { ids }).pipe(
+      tap({
+        next: (response) => {
+          console.log('📥 [JiraService] Arquivos encontrados:', response?.files?.length || 0);
+        },
+        error: (error) => {
+          console.error('❌ [JiraService] Erro ao buscar arquivos:', error);
+        }
+      })
+    );
+  }
+
+  /**
+   * Faz download de um arquivo específico
+   */
+  downloadArquivo(url: string): Observable<Blob> {
+    console.log('📥 [JiraService] Baixando arquivo:', url);
+    return this.http.get(url, { responseType: 'blob' }).pipe(
+      tap({
+        next: (blob) => {
+          console.log('✅ [JiraService] Arquivo baixado:', blob.size, 'bytes');
+        },
+        error: (error) => {
+          console.error('❌ [JiraService] Erro ao baixar arquivo:', error);
+        }
+      })
+    );
+  }
+
+
 }

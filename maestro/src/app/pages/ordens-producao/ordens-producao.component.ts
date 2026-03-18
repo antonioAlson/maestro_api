@@ -1,8 +1,9 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { JiraService } from '../../services/jira.service';
 import { finalize, take, timeout } from 'rxjs/operators';
+import JSZip from 'jszip';
 
 @Component({
   selector: 'app-ordens-producao',
@@ -13,6 +14,7 @@ import { finalize, take, timeout } from 'rxjs/operators';
 })
 export class OrdensProducaoComponent implements OnInit {
   showReprogramModal = false;
+  showPrintModal = false;
   idsInput = '';
   dateInput = '';
   isProcessing = false;
@@ -20,8 +22,18 @@ export class OrdensProducaoComponent implements OnInit {
   resultType: 'success' | 'error' | '' = '';
   dateIsValid = true;
   parsedIdsCount = 0;
+  
+  // Propriedades para busca de arquivos
+  printIdsInput = '';
+  parsedPrintIdsCount = 0;
+  foundFiles: Array<{url: string, name: string, cardId: string, selected: boolean, downloaded: boolean, extension?: string, isPdf?: boolean}> = [];
+  isSearchingFiles = false;
+  downloadProgress = 0;
+  totalFilesToDownload = 0;
+  
   private readonly feedbackDelayMs = 3000;
-  private readonly requestTimeoutMs = 120000; // 2 minutos para operações longas
+  private readonly requestTimeoutMs = 60000; // 1 minuto (otimizado)
+  private readonly downloadBatchSize = 15; // Downloads simultâneos (otimizado de 5 para 15)
   private processingGuardTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private jiraService: JiraService) {}
@@ -29,11 +41,44 @@ export class OrdensProducaoComponent implements OnInit {
   ngOnInit(): void {
   }
 
+  @HostListener('document:keydown', ['$event'])
+  handleKeyboardEvent(event: KeyboardEvent): void {
+    // ESC fecha qualquer modal aberto
+    if (event.key === 'Escape') {
+      if (this.showReprogramModal) {
+        this.closeReprogramModal();
+        event.preventDefault();
+      } else if (this.showPrintModal) {
+        this.closePrintModal();
+        event.preventDefault();
+      }
+    }
+    
+    // ENTER confirma o botão principal se disponível
+    if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.altKey) {
+      // Verificar se não está em um textarea
+      const target = event.target as HTMLElement;
+      if (target.tagName === 'TEXTAREA') {
+        return; // Permitir ENTER normal em textarea
+      }
+      
+      if (this.showReprogramModal && !this.isProcessing && this.parsedIdsCount > 0 && this.canReprogramWithDate()) {
+        this.reprogramar();
+        event.preventDefault();
+      } else if (this.showPrintModal && !this.isProcessing && this.parsedPrintIdsCount > 0) {
+        this.buscarEBaixarPdfs();
+        event.preventDefault();
+      }
+    }
+  }
+
   openRoutine(routineName: string): void {
     console.log('Abrindo rotina:', routineName);
     
     if (routineName === 'reprogramar-massa') {
       this.openReprogramModal();
+    } else if (routineName === 'imprimir-ops') {
+      this.openPrintModal();
     } else {
       // TODO: Implementar outras rotinas
       alert(`Rotina "${routineName}" em desenvolvimento`);
@@ -54,6 +99,300 @@ export class OrdensProducaoComponent implements OnInit {
     this.showReprogramModal = false;
     this.isProcessing = false;
     this.clearProcessingGuard();
+  }
+
+  openPrintModal(): void {
+    this.showPrintModal = true;
+    this.printIdsInput = '';
+    this.parsedPrintIdsCount = 0;
+    this.foundFiles = [];
+    this.isSearchingFiles = false;
+    this.downloadProgress = 0;
+    this.totalFilesToDownload = 0;
+    this.resultMessage = '';
+    this.resultType = '';
+  }
+
+  closePrintModal(): void {
+    this.showPrintModal = false;
+    this.isProcessing = false;
+    this.clearProcessingGuard();
+  }
+
+  onPrintIdsInput(): void {
+    const ids = this.parseIds(this.printIdsInput);
+    this.parsedPrintIdsCount = ids.length;
+  }
+
+  buscarEBaixarPdfs(): void {
+    console.log('⚡ Iniciando busca e criação de ZIP...');
+    
+    const ids = this.parseIds(this.printIdsInput);
+    if (ids.length === 0) {
+      this.resultType = 'error';
+      this.resultMessage = 'Por favor, informe pelo menos um ID';
+      return;
+    }
+
+    this.isProcessing = true;
+    this.foundFiles = [];
+    this.downloadProgress = 0;
+    this.totalFilesToDownload = 0;
+    this.resultMessage = `Buscando PDFs para ${ids.length} ${ids.length === 1 ? 'card' : 'cards'}...`;
+    this.resultType = '';
+    
+    this.jiraService.buscarArquivosPorIds(ids)
+      .pipe(
+        timeout(this.requestTimeoutMs),
+        take(1)
+      )
+      .subscribe({
+        next: (response) => {
+          if (response.success && response.files && response.files.length > 0) {
+            // Filtrar apenas PDFs (otimizado)
+            const pdfFiles = response.files.filter((file: any) => 
+              file.isPdf || file.extension?.toLowerCase() === '.pdf'
+            );
+            
+            if (pdfFiles.length > 0) {
+              this.resultMessage = `${pdfFiles.length} PDF(s) encontrado(s). Baixando...`;
+              // Baixar todos os PDFs automaticamente
+              this.downloadPdfsAutomaticamente(pdfFiles);
+            } else {
+              this.isProcessing = false;
+              this.resultType = 'error';
+              this.resultMessage = 'Nenhum PDF encontrado para os IDs informados.';
+            }
+          } else {
+            this.isProcessing = false;
+            this.resultType = 'error';
+            this.resultMessage = 'Nenhum PDF encontrado para os IDs informados.';
+          }
+        },
+        error: (error) => {
+          this.isProcessing = false;
+          this.resultType = 'error';
+          if (error?.name === 'TimeoutError') {
+            this.resultMessage = `Tempo limite excedido (${this.requestTimeoutMs / 1000}s). Tente novamente.`;
+          } else {
+            this.resultMessage = error.error?.message || 'Erro ao buscar PDFs';
+          }
+        }
+      });
+  }
+
+  private async downloadPdfsAutomaticamente(files: Array<any>): Promise<void> {
+    const total = files.length;
+    const startTime = performance.now();
+    
+    console.log(`⚡ Criando ZIP com ${total} PDFs...`);
+    
+    const zip = new JSZip();
+    let completed = 0;
+    const failedFiles: string[] = [];
+    
+    // Baixar todos os PDFs em paralelo e adicionar ao ZIP
+    for (let i = 0; i < files.length; i += this.downloadBatchSize) {
+      const batch = files.slice(i, i + this.downloadBatchSize);
+      const batchStart = performance.now();
+      
+      const downloadPromises = batch.map(async (file) => {
+        try {
+          const blob = await this.jiraService.downloadArquivo(file.url).toPromise();
+          
+          if (blob) {
+            // Adicionar PDF ao ZIP com prefixo do card ID para evitar duplicatas
+            const uniqueFileName = `${file.cardId}_${file.name}`;
+            zip.file(uniqueFileName, blob);
+            return { success: true, name: file.name };
+          }
+          return { success: false, name: file.name };
+        } catch (error) {
+          console.error(`❌ Erro: ${file.name}`);
+          return { success: false, name: file.name };
+        }
+      });
+      
+      const results = await Promise.all(downloadPromises);
+      completed += results.filter(r => r.success).length;
+      failedFiles.push(...results.filter(r => !r.success).map(r => r.name));
+      
+      const batchTime = ((performance.now() - batchStart) / 1000).toFixed(1);
+      console.log(`📦 Lote ${Math.floor(i / this.downloadBatchSize) + 1} completo em ${batchTime}s`);
+      
+      this.downloadProgress = Math.round((completed / total) * 100);
+      this.resultMessage = `Adicionando PDFs ao ZIP... ${this.downloadProgress}% (${completed}/${total})`;
+    }
+
+    if (completed > 0) {
+      // Gerar o arquivo ZIP
+      this.resultMessage = 'Gerando arquivo ZIP...';
+      console.log('🗜️ Comprimindo arquivos...');
+      
+      const zipBlob = await zip.generateAsync({ 
+        type: 'blob',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 }
+      });
+      
+      // Download do ZIP
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const zipFileName = `PDFs-${timestamp}.zip`;
+      
+      const url = URL.createObjectURL(zipBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = zipFileName;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }, 100);
+      
+      const totalTime = ((performance.now() - startTime) / 1000).toFixed(1);
+      console.log(`⚡ ZIP gerado em ${totalTime}s com ${completed} PDFs`);
+      
+      this.isProcessing = false;
+      this.resultType = 'success';
+      
+      if (failedFiles.length > 0) {
+        this.resultMessage = `ZIP baixado com ${completed} de ${total} PDFs em ${totalTime}s! (${failedFiles.length} falharam)`;
+      } else {
+        this.resultMessage = `ZIP baixado com ${completed} PDFs em ${totalTime}s!`;
+      }
+    } else {
+      const totalTime = ((performance.now() - startTime) / 1000).toFixed(1);
+      this.isProcessing = false;
+      this.resultType = 'error';
+      this.resultMessage = 'Erro ao baixar os PDFs. Tente novamente.';
+    }
+  }
+
+  toggleFileSelection(index: number): void {
+    if (!this.foundFiles[index].downloaded) return;
+    this.foundFiles[index].selected = !this.foundFiles[index].selected;
+  }
+
+  toggleAllFiles(selectAll: boolean): void {
+    this.foundFiles.forEach(file => {
+      if (file.downloaded) {
+        file.selected = selectAll;
+      }
+    });
+  }
+
+  getSelectedFilesCount(): number {
+    return this.foundFiles.filter(file => file.selected).length;
+  }
+
+  clearPrintSelection(): void {
+    this.printIdsInput = '';
+    this.parsedPrintIdsCount = 0;
+    this.foundFiles = [];
+    this.resultMessage = '';
+    this.resultType = '';
+  }
+
+  canSearchFiles(): boolean {
+    return this.parsedPrintIdsCount > 0 && !this.isSearchingFiles;
+  }
+
+  downloadSelectedFiles(): void {
+    const selectedFiles = this.foundFiles.filter(f => f.selected && f.downloaded);
+    
+    if (selectedFiles.length === 0) {
+      this.resultType = 'error';
+      this.resultMessage = 'Nenhum PDF selecionado para download';
+      return;
+    }
+
+    console.log(`📥 Iniciando download de ${selectedFiles.length} PDF(s)...`);
+    this.isProcessing = true;
+    this.downloadProgress = 0;
+    this.resultMessage = `Baixando ${selectedFiles.length} PDF(s)...`;
+    this.resultType = '';
+    
+    // Download em paralelo otimizado
+    this.downloadFilesInBatches(selectedFiles, this.downloadBatchSize);
+  }
+
+  private async downloadFilesInBatches(files: Array<any>, batchSize: number): Promise<void> {
+    const total = files.length;
+    const startTime = performance.now();
+    
+    console.log(`⚡ Criando ZIP com ${total} PDFs selecionados...`);
+    
+    const zip = new JSZip();
+    let completed = 0;
+    
+    for (let i = 0; i < files.length; i += batchSize) {
+      const batch = files.slice(i, i + batchSize);
+      
+      const downloadPromises = batch.map(async (file) => {
+        try {
+          const blob = await this.jiraService.downloadArquivo(file.url).toPromise();
+          
+          if (blob) {
+            // Adicionar PDF ao ZIP com prefixo do card ID para evitar duplicatas
+            const uniqueFileName = `${file.cardId}_${file.name}`;
+            zip.file(uniqueFileName, blob);
+            return true;
+          }
+          return false;
+        } catch (error) {
+          console.error(`❌ Erro: ${file.name}`);
+          return false;
+        }
+      });
+      
+      const results = await Promise.all(downloadPromises);
+      completed += results.filter(r => r).length;
+      
+      this.downloadProgress = Math.round((completed / total) * 100);
+      this.resultMessage = `Adicionando PDFs ao ZIP... ${this.downloadProgress}% (${completed}/${total})`;
+    }
+
+    if (completed > 0) {
+      // Gerar o arquivo ZIP
+      this.resultMessage = 'Gerando arquivo ZIP...';
+      
+      const zipBlob = await zip.generateAsync({ 
+        type: 'blob',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 }
+      });
+      
+      // Download do ZIP
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const zipFileName = `PDFs-Selecionados-${timestamp}.zip`;
+      
+      const url = URL.createObjectURL(zipBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = zipFileName;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }, 100);
+      
+      const totalTime = ((performance.now() - startTime) / 1000).toFixed(1);
+      console.log(`⚡ ZIP gerado em ${totalTime}s com ${completed} PDFs`);
+      
+      this.isProcessing = false;
+      this.resultType = 'success';
+      this.resultMessage = `ZIP baixado com ${completed} de ${total} PDF(s) em ${totalTime}s!`;
+    } else {
+      this.isProcessing = false;
+      this.resultType = 'error';
+      this.resultMessage = 'Erro ao baixar os PDFs. Tente novamente.';
+    }
   }
 
   private startProcessingGuard(): void {
@@ -128,6 +467,52 @@ export class OrdensProducaoComponent implements OnInit {
     } else {
       this.dateIsValid = true; // Não marcar erro enquanto digita
     }
+  }
+
+  private toIsoDate(dateStr: string): string | null {
+    const match = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match) return null;
+
+    const day = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10);
+    const year = parseInt(match[3], 10);
+
+    if (!this.isValidDate(dateStr)) return null;
+
+    const dd = String(day).padStart(2, '0');
+    const mm = String(month).padStart(2, '0');
+    return `${year}-${mm}-${dd}`;
+  }
+
+  private fromIsoDate(isoDate: string): string {
+    const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return isoDate;
+
+    const [, year, month, day] = match;
+    return `${day}/${month}/${year}`;
+  }
+
+  openCalendarPicker(nativePicker: HTMLInputElement): void {
+    if (this.isProcessing) return;
+
+    const isoDate = this.toIsoDate(this.dateInput.trim());
+    nativePicker.value = isoDate || '';
+
+    const pickerWithMethod = nativePicker as HTMLInputElement & { showPicker?: () => void };
+    if (typeof pickerWithMethod.showPicker === 'function') {
+      pickerWithMethod.showPicker();
+      return;
+    }
+
+    nativePicker.click();
+  }
+
+  onNativeDateChange(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (!input.value) return;
+
+    this.dateInput = this.fromIsoDate(input.value);
+    this.dateIsValid = true;
   }
 
   /**

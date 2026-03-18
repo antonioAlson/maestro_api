@@ -1,5 +1,12 @@
 import express from 'express';
-import { getJiraIssues, getContecIssues, reprogramarEmMassa } from '../controllers/jiraController.js';
+import { 
+  getJiraIssues, 
+  getContecIssues, 
+  reprogramarEmMassa,
+  buscarArquivosPorIds,
+  downloadArquivo,
+  downloadArquivoJira
+} from '../controllers/jiraController.js';
 import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -12,5 +19,14 @@ router.get('/contec', authenticate, getContecIssues);
 
 // Reprogramar múltiplas issues em massa
 router.post('/reprogramar-massa', authenticate, reprogramarEmMassa);
+
+// Buscar arquivos por IDs
+router.post('/buscar-arquivos', authenticate, buscarArquivosPorIds);
+
+// Download de arquivo específico
+router.get('/download-arquivo/:cardId/:directory/*', authenticate, downloadArquivo);
+
+// Download de anexo do Jira
+router.get('/download-arquivo-jira/:cardId/:attachmentId/:filename', authenticate, downloadArquivoJira);
 
 export default router;

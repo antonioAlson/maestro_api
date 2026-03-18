@@ -1,4 +1,11 @@
 import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 function formatJiraDate(rawDate) {
   if (!rawDate) return '';
@@ -25,6 +32,139 @@ function normalizeText(value) {
 }
 
 const BLOCKED_REPORT_STATUS = 'RECEBIDO NAO LIBERADO';
+
+function normalizeCardId(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function toPosixPath(value) {
+  return String(value || '').replace(/\\/g, '/');
+}
+
+function sanitizeRelativePath(value) {
+  return toPosixPath(String(value || '').trim())
+    .replace(/^\/+/, '')
+    .replace(/\.\.(\/|$)/g, '');
+}
+
+function findCardDirectories(entries, cardId) {
+  const normalizedCardId = normalizeCardId(cardId);
+  const directories = entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+
+  const exact = directories.filter((name) => normalizeCardId(name) === normalizedCardId);
+  if (exact.length > 0) {
+    return exact;
+  }
+
+  return directories.filter((name) => {
+    const normalized = normalizeCardId(name);
+    return normalized.startsWith(`${normalizedCardId} `)
+      || normalized.startsWith(`${normalizedCardId}-`)
+      || normalized.startsWith(`${normalizedCardId}_`)
+      || normalized.includes(normalizedCardId);
+  });
+}
+
+async function walkFiles(rootPath, currentRelative = '') {
+  const currentPath = currentRelative ? path.join(rootPath, currentRelative) : rootPath;
+  const entries = await fs.promises.readdir(currentPath, { withFileTypes: true });
+  const output = [];
+
+  for (const entry of entries) {
+    const relative = currentRelative ? path.join(currentRelative, entry.name) : entry.name;
+
+    if (entry.isDirectory()) {
+      const nested = await walkFiles(rootPath, relative);
+      output.push(...nested);
+      continue;
+    }
+
+    if (entry.isFile()) {
+      output.push(relative);
+    }
+  }
+
+  return output;
+}
+
+function createServerBaseUrl(req) {
+  return `${req.protocol}://${req.get('host')}`;
+}
+
+function toLocalFileResult(req, cardId, dirName, relativeFilePath) {
+  const baseUrl = createServerBaseUrl(req);
+  const safeRelativePath = sanitizeRelativePath(relativeFilePath);
+  const filename = path.basename(relativeFilePath);
+  const ext = path.extname(filename).toLowerCase();
+
+  return {
+    url: `${baseUrl}/api/jira/download-arquivo/${encodeURIComponent(cardId)}/${encodeURIComponent(dirName)}/${encodeURIComponent(toPosixPath(safeRelativePath))}`,
+    name: filename,
+    cardId,
+    extension: ext,
+    isPdf: ext === '.pdf',
+    source: 'local',
+    relativePath: toPosixPath(path.join(dirName, safeRelativePath))
+  };
+}
+
+function toJiraFileResult(req, cardId, attachment) {
+  const baseUrl = createServerBaseUrl(req);
+  const ext = path.extname(attachment.filename || '').toLowerCase();
+
+  return {
+    url: `${baseUrl}/api/jira/download-arquivo-jira/${encodeURIComponent(cardId)}/${encodeURIComponent(attachment.id)}/${encodeURIComponent(attachment.filename || 'arquivo')}`,
+    name: attachment.filename,
+    cardId,
+    extension: ext,
+    isPdf: ext === '.pdf',
+    source: 'jira',
+    size: attachment.size || 0,
+    mimeType: attachment.mimeType || 'application/octet-stream'
+  };
+}
+
+async function buscarArquivosNoJira(cardId, req) {
+  const jiraUrl = process.env.JIRA_URL;
+  const email = process.env.JIRA_EMAIL;
+  const apiToken = process.env.JIRA_API_TOKEN;
+
+  if (!jiraUrl || !email || !apiToken) {
+    return [];
+  }
+
+  const auth = Buffer.from(`${email}:${apiToken}`).toString('base64');
+  const url = `${jiraUrl}/rest/api/3/issue/${encodeURIComponent(cardId)}?fields=attachment`;
+
+  try {
+    const response = await axios.get(url, {
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Basic ${auth}`
+      }
+    });
+
+    const attachments = response.data?.fields?.attachment;
+    if (!Array.isArray(attachments) || attachments.length === 0) {
+      return [];
+    }
+
+    // Filtrar apenas PDFs
+    return attachments
+      .map((attachment) => toJiraFileResult(req, cardId, attachment))
+      .filter((file) => file.isPdf);
+  } catch (error) {
+    // Retornar vazio silenciosamente para cards não encontrados
+    if (error?.response?.status === 404) {
+      return [];
+    }
+    // Log apenas para erros reais
+    console.error(`❌ Jira erro: ${cardId}`);
+    return [];
+  }
+}
 
 function isBlockedReportStatus(statusName, situacao) {
   const normalizedStatus = normalizeText(statusName);
@@ -256,62 +396,75 @@ export const getContecIssues = async (req, res) => {
     console.log('🔑 [CONTEC] Token presente:', !!apiToken);
     console.log('🔍 [CONTEC] JQL:', jql);
 
+    const situacoesValidas = [
+      '⚪️RECEBIDO ENCAMINHADO',
+      '🟢RECEBIDO LIBERADO',
+      '⚫Aguardando entrada'
+    ];
+
     let allIssues = [];
-    let startAt = 0;
-    const maxResults = 100;
-    let total = 0;
+    let nextPageToken = null;
     let pageCount = 0;
 
-    // Buscar todas as páginas
-    do {
+    // Buscar todas as páginas via nextPageToken
+    while (true) {
       pageCount++;
-      console.log(`📄 [CONTEC PÁGINA ${pageCount}] Buscando issues - startAt: ${startAt}, maxResults: ${maxResults}`);
-      
+      console.log(`📄 [CONTEC PÁGINA ${pageCount}] Buscando issues via nextPageToken...`);
+
+      const params = {
+        jql: jql,
+        maxResults: 100,
+        fields: [
+          'issuetype',
+          'summary',
+          'status',
+          'customfield_10039',
+          'customfield_11298',
+          'customfield_10245'
+        ].join(',')
+      };
+
+      if (nextPageToken) {
+        params.nextPageToken = nextPageToken;
+      }
+
       const response = await axios.get(url, {
         headers: {
           'Accept': 'application/json',
           'Authorization': `Basic ${auth}`
         },
-        params: {
-          jql: jql,
-          startAt: startAt,
-          maxResults: maxResults,
-          fields: [
-            'issuetype',
-            'summary',
-            'status',
-            'customfield_10039',
-            'customfield_11298',
-            'customfield_10245'
-          ].join(',')
-        }
+        params
       });
 
       const issues = response.data.issues || [];
-      total = response.data.total || 0;
-      
-      console.log(`✅ [CONTEC PÁGINA ${pageCount}] Recebidas ${issues.length} issues`);
-      console.log(`📊 [CONTEC PÁGINA ${pageCount}] Total no Jira: ${total}`);
-      console.log(`📊 [CONTEC PÁGINA ${pageCount}] Acumuladas até agora: ${allIssues.length + issues.length}`);
-      
-      allIssues = [...allIssues, ...issues];
-      startAt += maxResults;
-      
-      console.log(`🔄 [CONTEC PÁGINA ${pageCount}] Próximo startAt: ${startAt}`);
-      console.log(`🔄 [CONTEC PÁGINA ${pageCount}] Continuar? ${startAt < total ? 'SIM' : 'NÃO'}`);
+      const isLast = !!response.data.isLast;
 
-    } while (startAt < total);
+      console.log(`✅ [CONTEC PÁGINA ${pageCount}] Recebidas ${issues.length} issues`);
+      console.log(`📊 [CONTEC PÁGINA ${pageCount}] Acumuladas até agora: ${allIssues.length + issues.length}`);
+
+      allIssues = [...allIssues, ...issues];
+
+      if (isLast) {
+        break;
+      }
+
+      nextPageToken = response.data.nextPageToken || null;
+      if (!nextPageToken) {
+        console.log('⚠️ [CONTEC] nextPageToken ausente; encerrando paginação para evitar loop.');
+        break;
+      }
+    }
 
     console.log(`✅ [CONTEC] Paginação concluída! ${pageCount} páginas processadas`);
     console.log(`🎯 [CONTEC] Total de issues coletadas: ${allIssues.length}`);
-    console.log(`🎯 [CONTEC] Total esperado do Jira: ${total}`);
 
     // Marcas CONTEC que devem ser filtradas
     const marcasContec = ['land rover', 'toyota', 'jaguar'];
 
-    // Processar e filtrar issues (apenas por marca CONTEC - sem filtro de situação)
+    // Processar e filtrar issues (SITUAÇÃO válida + marca CONTEC)
     const processedData = [];
     let skippedByStatus = 0;
+    let skippedBySituacao = 0;
     
     for (const issue of allIssues) {
       const fields = issue.fields;
@@ -324,6 +477,11 @@ export const getContecIssues = async (req, res) => {
         situacao = situacaoRaw.value;
       } else if (situacaoRaw) {
         situacao = situacaoRaw;
+      }
+
+      if (!situacoesValidas.includes(situacao)) {
+        skippedBySituacao++;
+        continue;
       }
 
       const statusName = fields.status?.name || '';
@@ -373,6 +531,7 @@ export const getContecIssues = async (req, res) => {
     }
 
     console.log(`⛔ [CONTEC] Issues removidas por status bloqueado: ${skippedByStatus}`);
+    console.log(`⛔ [CONTEC] Issues removidas por SITUAÇÃO fora da lista: ${skippedBySituacao}`);
     console.log(`✅ Issues CONTEC filtradas: ${processedData.length}`);
 
     // Ordenar alfabeticamente por veículo
@@ -552,4 +711,214 @@ export const reprogramarEmMassa = async (req, res) => {
     res.status(500).json(errorResponse);
     console.log('📤 [ERROR] Resposta de erro enviada');
   }
-  };
+};
+
+/**
+ * Busca todos os PDFs por IDs dos cards (filtrados por extensão .pdf)
+ */
+export const buscarArquivosPorIds = async (req, res) => {
+  console.log('🔍 ============================================');
+  console.log('🔍 ENDPOINT /buscar-arquivos (PDFs) INICIADO');
+  console.log('🔍 ============================================');
+  
+  try {
+    const { ids } = req.body;
+    
+    console.log('📦 Body recebido:', { ids });
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Lista de IDs é obrigatória e deve ser um array não vazio'
+      });
+    }
+
+    // Diretório base onde estão os arquivos locais
+    const basePdfPath = process.env.PDF_BASE_PATH || 'C:\\OPs';
+    console.log(`📁 Buscando PDFs para ${ids.length} cards em: ${basePdfPath}`);
+    
+    const foundFiles = [];
+    const startTime = Date.now();
+
+    let basePathEntries = null;
+    try {
+      basePathEntries = await fs.promises.readdir(basePdfPath, { withFileTypes: true });
+    } catch (error) {
+      console.log('⚠️ Diretório local não acessível. Busca apenas no Jira.');
+    }
+
+    // Buscar arquivos para cada ID em paralelo (local + Jira)
+    const searchPromises = ids.map(async (cardId) => {
+      try {
+        let localFiles = [];
+        if (basePathEntries) {
+          const matchingDirs = findCardDirectories(basePathEntries, cardId);
+
+          if (matchingDirs.length > 0) {
+            for (const dirName of matchingDirs) {
+              const absoluteDir = path.join(basePdfPath, dirName);
+              const files = await walkFiles(absoluteDir);
+              files.forEach((relativeFile) => {
+                const fileResult = toLocalFileResult(req, cardId, dirName, relativeFile);
+                // Filtrar apenas PDFs
+                if (fileResult.isPdf) {
+                  localFiles.push(fileResult);
+                }
+              });
+            }
+          }
+        }
+
+        const jiraFiles = await buscarArquivosNoJira(cardId, req);
+
+        const dedupeMap = new Map();
+        [...localFiles, ...jiraFiles].forEach((file) => {
+          const key = `${normalizeCardId(file.cardId)}|${normalizeCardId(file.name)}|${file.size || 0}`;
+          if (!dedupeMap.has(key)) {
+            dedupeMap.set(key, file);
+          }
+        });
+
+        return Array.from(dedupeMap.values());
+      } catch (error) {
+        console.error(`❌ Erro: ${cardId} - ${error.message}`);
+        return [];
+      }
+    });
+
+    // Aguardar todas as buscas em paralelo
+    const results = await Promise.all(searchPromises);
+    results.forEach(files => foundFiles.push(...files));
+
+    const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`⚡ Busca concluída: ${foundFiles.length} PDFs encontrados em ${elapsedTime}s`);
+
+    const responseData = {
+      success: true,
+      count: foundFiles.length,
+      files: foundFiles
+    };
+
+    res.status(200).json(responseData);
+
+  } catch (error) {
+    console.error('❌ [ERROR] Erro ao buscar PDFs:', error);
+    console.error('❌ [ERROR] Stack:', error.stack);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar PDFs: ' + error.message
+    });
+  }
+};
+
+/**
+ * Faz download de um arquivo específico
+ */
+export const downloadArquivo = async (req, res) => {
+  try {
+    const { cardId, directory } = req.params;
+    const rawRelativeFilePath = req.params[0] || '';
+    const safeRelativePath = sanitizeRelativePath(decodeURIComponent(rawRelativeFilePath));
+    const safeDirectory = decodeURIComponent(directory || '');
+    
+    console.log(`📥 Download solicitado: ${cardId}/${safeDirectory}/${safeRelativePath}`);
+
+    const basePdfPath = process.env.PDF_BASE_PATH || 'C:\\OPs';
+    const filePath = path.join(basePdfPath, safeDirectory, safeRelativePath);
+
+    console.log(`📁 Caminho completo: ${filePath}`);
+
+    // Verificar se o arquivo existe
+    if (!fs.existsSync(filePath)) {
+      console.log('❌ Arquivo não encontrado');
+      return res.status(404).json({
+        success: false,
+        message: 'Arquivo não encontrado'
+      });
+    }
+
+    // Enviar arquivo
+    console.log('✅ Enviando arquivo...');
+    res.sendFile(filePath, (err) => {
+      if (err) {
+        console.error('❌ Erro ao enviar arquivo:', err);
+        if (!res.headersSent) {
+          res.status(500).json({
+            success: false,
+            message: 'Erro ao enviar arquivo'
+          });
+        }
+      } else {
+        console.log('✅ Arquivo enviado com sucesso');
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao fazer download do arquivo:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao fazer download: ' + error.message
+    });
+  }
+};
+
+/**
+ * Faz proxy de download de anexo do Jira
+ */
+export const downloadArquivoJira = async (req, res) => {
+  try {
+    const { cardId, attachmentId, filename } = req.params;
+    const jiraUrl = process.env.JIRA_URL;
+    const email = process.env.JIRA_EMAIL;
+    const apiToken = process.env.JIRA_API_TOKEN;
+
+    if (!jiraUrl || !email || !apiToken) {
+      return res.status(500).json({
+        success: false,
+        message: 'Credenciais do Jira não configuradas no servidor'
+      });
+    }
+
+    const auth = Buffer.from(`${email}:${apiToken}`).toString('base64');
+    const issueUrl = `${jiraUrl}/rest/api/3/issue/${encodeURIComponent(cardId)}?fields=attachment`;
+
+    const issueResponse = await axios.get(issueUrl, {
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Basic ${auth}`
+      }
+    });
+
+    const attachments = issueResponse.data?.fields?.attachment || [];
+    const target = attachments.find((item) => String(item.id) === String(attachmentId));
+
+    if (!target?.content) {
+      return res.status(404).json({
+        success: false,
+        message: 'Anexo não encontrado no Jira'
+      });
+    }
+
+    const fileResponse = await axios.get(target.content, {
+      responseType: 'stream',
+      headers: {
+        Authorization: `Basic ${auth}`
+      }
+    });
+
+    const downloadName = target.filename || decodeURIComponent(filename || 'arquivo');
+    const contentType = target.mimeType || fileResponse.headers['content-type'] || 'application/octet-stream';
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+
+    fileResponse.data.pipe(res);
+  } catch (error) {
+    console.error('❌ Erro ao baixar anexo do Jira:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao baixar anexo do Jira: ' + error.message
+    });
+  }
+};
