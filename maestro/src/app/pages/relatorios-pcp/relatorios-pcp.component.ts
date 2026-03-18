@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, NgZone, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { JiraService } from '../../services/jira.service';
 
@@ -15,9 +15,20 @@ export class RelatoriosPcpComponent implements OnInit {
   message = '';
   messageType: 'success' | 'error' | '' = '';
 
-  constructor(private jiraService: JiraService) {}
+  constructor(
+    private jiraService: JiraService,
+    private ngZone: NgZone,
+    private cdr: ChangeDetectorRef
+  ) {}
 
   ngOnInit(): void {
+  }
+
+  private runUiUpdate(update: () => void): void {
+    this.ngZone.run(() => {
+      update();
+      this.cdr.detectChanges();
+    });
   }
 
   generateJiraReport(): void {
@@ -27,17 +38,27 @@ export class RelatoriosPcpComponent implements OnInit {
     this.messageType = '';
 
     console.log('📞 [Componente] Chamando jiraService.exportJiraReport()');
-    this.jiraService.exportJiraReport().subscribe({
+    this.jiraService.exportJiraReport(() => {
+      this.runUiUpdate(() => {
+        this.isGenerating = false;
+        this.message = 'Download iniciado. O arquivo está sendo salvo.';
+        this.messageType = 'success';
+      });
+    }).subscribe({
       next: (result) => {
         console.log('✅ [Componente] Resposta recebida:', result);
-        this.isGenerating = false;
-        this.message = result.message;
-        this.messageType = result.success ? 'success' : 'error';
+        this.runUiUpdate(() => {
+          this.isGenerating = false;
+          this.message = result.message;
+          this.messageType = result.success ? 'success' : 'error';
+        });
         
         // Limpar mensagem após 5 segundos
         setTimeout(() => {
-          this.message = '';
-          this.messageType = '';
+          this.runUiUpdate(() => {
+            this.message = '';
+            this.messageType = '';
+          });
         }, 5000);
       },
       error: (error) => {
@@ -48,14 +69,18 @@ export class RelatoriosPcpComponent implements OnInit {
           message: error.message,
           error: error.error
         });
-        this.isGenerating = false;
-        this.message = 'Erro ao gerar relatório. Verifique as credenciais do Jira.';
-        this.messageType = 'error';
+        this.runUiUpdate(() => {
+          this.isGenerating = false;
+          this.message = 'Erro ao gerar relatório. Verifique as credenciais do Jira.';
+          this.messageType = 'error';
+        });
         
         // Limpar mensagem após 5 segundos
         setTimeout(() => {
-          this.message = '';
-          this.messageType = '';
+          this.runUiUpdate(() => {
+            this.message = '';
+            this.messageType = '';
+          });
         }, 5000);
       }
     });
@@ -68,17 +93,27 @@ export class RelatoriosPcpComponent implements OnInit {
     this.messageType = '';
 
     console.log('📞 [Componente] Chamando jiraService.exportContecReport()');
-    this.jiraService.exportContecReport().subscribe({
+    this.jiraService.exportContecReport(() => {
+      this.runUiUpdate(() => {
+        this.isGeneratingContec = false;
+        this.message = 'Download iniciado. O arquivo CONTEC está sendo salvo.';
+        this.messageType = 'success';
+      });
+    }).subscribe({
       next: (result) => {
         console.log('✅ [Componente] Resposta CONTEC recebida:', result);
-        this.isGeneratingContec = false;
-        this.message = result.message;
-        this.messageType = result.success ? 'success' : 'error';
+        this.runUiUpdate(() => {
+          this.isGeneratingContec = false;
+          this.message = result.message;
+          this.messageType = result.success ? 'success' : 'error';
+        });
         
         // Limpar mensagem após 5 segundos
         setTimeout(() => {
-          this.message = '';
-          this.messageType = '';
+          this.runUiUpdate(() => {
+            this.message = '';
+            this.messageType = '';
+          });
         }, 5000);
       },
       error: (error) => {
@@ -89,14 +124,18 @@ export class RelatoriosPcpComponent implements OnInit {
           message: error.message,
           error: error.error
         });
-        this.isGeneratingContec = false;
-        this.message = 'Erro ao gerar relatório CONTEC.';
-        this.messageType = 'error';
+        this.runUiUpdate(() => {
+          this.isGeneratingContec = false;
+          this.message = 'Erro ao gerar relatório CONTEC.';
+          this.messageType = 'error';
+        });
         
         // Limpar mensagem após 5 segundos
         setTimeout(() => {
-          this.message = '';
-          this.messageType = '';
+          this.runUiUpdate(() => {
+            this.message = '';
+            this.messageType = '';
+          });
         }, 5000);
       }
     });

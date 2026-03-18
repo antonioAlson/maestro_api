@@ -1,5 +1,19 @@
 import axios from 'axios';
 
+function formatJiraDate(rawDate) {
+  if (!rawDate) return '';
+
+  const dateOnly = String(rawDate).split('T')[0];
+  const match = dateOnly.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (match) {
+    const [, year, month, day] = match;
+    return `${day}/${month}/${year}`;
+  }
+
+  return String(rawDate);
+}
+
 /**
  * Busca issues do Jira com paginação
  */
@@ -111,12 +125,7 @@ export const getJiraIssues = async (req, res) => {
       let previsao = '';
       const previsaoRaw = fields.customfield_10245;
       if (previsaoRaw) {
-        try {
-          const date = new Date(previsaoRaw);
-          previsao = date.toLocaleDateString('pt-BR');
-        } catch {
-          previsao = previsaoRaw;
-        }
+        previsao = formatJiraDate(previsaoRaw);
       }
 
       // Extrair número do resumo (se houver)
@@ -300,12 +309,7 @@ export const getContecIssues = async (req, res) => {
       let previsao = '';
       const previsaoRaw = fields.customfield_10245;
       if (previsaoRaw) {
-        try {
-          const date = new Date(previsaoRaw);
-          previsao = date.toLocaleDateString('pt-BR');
-        } catch {
-          previsao = previsaoRaw;
-        }
+        previsao = formatJiraDate(previsaoRaw);
       }
 
       // Extrair número do resumo (se houver)
@@ -354,3 +358,126 @@ export const getContecIssues = async (req, res) => {
     });
   }
 };
+
+/**
+ * Reprograma múltiplas issues do Jira com nova data de previsão
+ */
+export const reprogramarEmMassa = async (req, res) => {
+  try {
+    console.log('🚀 Iniciando reprogramação em massa...');
+
+    const { ids, date } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Lista de IDs é obrigatória e deve ser um array não vazio'
+      });
+    }
+
+    if (!date) {
+      return res.status(400).json({
+        success: false,
+        message: 'Data é obrigatória'
+      });
+    }
+
+    const jiraUrl = process.env.JIRA_URL;
+    const email = process.env.JIRA_EMAIL;
+    const apiToken = process.env.JIRA_API_TOKEN;
+    const campoPrevisao = 'customfield_10245';
+
+    if (!jiraUrl || !email || !apiToken) {
+      console.error('❌ Credenciais do Jira não configuradas');
+      return res.status(500).json({
+        success: false,
+        message: 'Credenciais do Jira não configuradas no servidor'
+      });
+    }
+
+    const auth = Buffer.from(`${email}:${apiToken}`).toString('base64');
+
+    console.log('📅 Nova previsão:', date);
+    console.log('📋 IDs para atualizar:', ids.length);
+    ids.forEach(id => console.log(`   • ${id}`));
+
+    let successCount = 0;
+    let errorCount = 0;
+    const results = [];
+
+    // Atualizar cada issue
+    for (const issueId of ids) {
+      try {
+        const url = `${jiraUrl}/rest/api/3/issue/${issueId}`;
+        
+        const response = await axios.put(
+          url,
+          {
+            fields: {
+              [campoPrevisao]: date
+            }
+          },
+          {
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'Authorization': `Basic ${auth}`
+            }
+          }
+        );
+
+        if (response.status === 204 || response.status === 200) {
+          successCount++;
+          console.log(`✅ ${issueId} atualizado para ${date}`);
+          results.push({
+            id: issueId,
+            success: true,
+            message: `Atualizado para ${date}`
+          });
+        } else {
+          errorCount++;
+          console.log(`❌ ${issueId} falhou (${response.status})`);
+          results.push({
+            id: issueId,
+            success: false,
+            message: `Falhou com status ${response.status}`
+          });
+        }
+      } catch (error) {
+        errorCount++;
+        const errorMessage = error.response?.data?.errorMessages?.join(', ') || error.message;
+        console.log(`❌ ${issueId} erro: ${errorMessage}`);
+        results.push({
+          id: issueId,
+          success: false,
+          message: errorMessage
+        });
+      }
+    }
+
+    console.log('=' * 60);
+    console.log('REPROGRAMAÇÃO FINALIZADA');
+    console.log(`✅ Sucesso: ${successCount}`);
+    console.log(`❌ Erros: ${errorCount}`);
+
+    return res.status(200).json({
+      success: true,
+      message: `Reprogramação concluída: ${successCount} sucesso, ${errorCount} erros`,
+      data: {
+        successCount,
+        errorCount,
+        total: ids.length,
+        results
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erro na reprogramação em massa:', error);
+    
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao reprogramar issues: ' + error.message
+    });
+  }
+};
+

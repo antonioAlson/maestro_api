@@ -71,4 +71,67 @@
       </button>
     </div>
   </main>
+
+  <!-- Modal de Reprogramação em Massa -->
+  <div class="modal-overlay" *ngIf="showReprogramModal" (click)="closeReprogramModal()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h2>Reprogramar em Massa</h2>
+        <button type="button" class="close-btn" (click)="closeReprogramModal()">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="ids-input">
+            IDs dos Cards (separados por vírgula, ponto e vírgula, espaço ou quebra de linha)
+          </label>
+          <textarea 
+            id="ids-input"
+            [(ngModel)]="idsInput"
+            placeholder="Ex: MANTA-123, MANTA-124&#10;TENSYLON-456; MANTA-789"
+            rows="6"
+            [disabled]="isProcessing"
+          ></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="date-input">
+            Nova Data de Previsão
+          </label>
+          <input 
+            type="text"
+            id="date-input"
+            [(ngModel)]="dateInput"
+            placeholder="YYYY-MM-DD, DD/MM/YYYY ou DD-MM-YYYY"
+            [disabled]="isProcessing"
+          />
+          <small class="help-text">Formatos aceitos: 2026-03-20, 20/03/2026, 20-03-2026</small>
+        </div>
+
+        <div class="result-message" *ngIf="resultMessage" [class.success]="resultType === 'success'" [class.error]="resultType === 'error'">
+          <pre>{{ resultMessage }}</pre>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" (click)="closeReprogramModal()" [disabled]="isProcessing">
+          Cancelar
+        </button>
+        <button type="button" class="btn-primary" (click)="reprogramar()" [disabled]="isProcessing">
+          <span *ngIf="!isProcessing">Reprogramar</span>
+          <span *ngIf="isProcessing">
+            <svg class="spinner" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
+            </svg>
+            Processando...
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
 </div>

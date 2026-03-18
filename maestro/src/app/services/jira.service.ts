@@ -39,7 +39,11 @@ export class JiraService {
   /**
    * Gera arquivo Excel e faz download
    */
-  private async generateExcel(data: ExportRow[], filename?: string): Promise<void> {
+  private async generateExcel(
+    data: ExportRow[],
+    filename?: string,
+    onDownloadStart?: () => void
+  ): Promise<void> {
     console.log('📊 [JiraService] Gerando arquivo Excel...');
     
     // Criar workbook e worksheet
@@ -128,6 +132,7 @@ export class JiraService {
     const link = document.createElement('a');
     link.href = url;
     link.download = finalFilename;
+    onDownloadStart?.();
     link.click();
     window.URL.revokeObjectURL(url);
     
@@ -137,7 +142,7 @@ export class JiraService {
   /**
    * Método principal para exportar relatório - chama o backend
    */
-  exportJiraReport(): Observable<{ success: boolean; message: string; count: number }> {
+  exportJiraReport(onDownloadStart?: () => void): Observable<{ success: boolean; message: string; count: number }> {
     console.log('🎯 [JiraService] exportJiraReport iniciado');
     console.log('📡 Chamando backend:', `${this.apiUrl}/jira/issues`);
     
@@ -179,7 +184,7 @@ export class JiraService {
         
         // Gerar Excel (async) e converter Promise em Observable
         return from(
-          this.generateExcel(excelData).then(() => ({
+          this.generateExcel(excelData, undefined, onDownloadStart).then(() => ({
             success: true,
             message: `Relatório gerado com sucesso! ${excelData.length} cartões exportados.`,
             count: excelData.length
@@ -192,7 +197,7 @@ export class JiraService {
   /**
    * Método para exportar relatório CONTEC - apenas marcas Land Rover, Toyota e Jaguar
    */
-  exportContecReport(): Observable<{ success: boolean; message: string; count: number }> {
+  exportContecReport(onDownloadStart?: () => void): Observable<{ success: boolean; message: string; count: number }> {
     console.log('🎯 [JiraService] exportContecReport iniciado');
     console.log('📡 Chamando backend:', `${this.apiUrl}/jira/contec`);
     
@@ -246,7 +251,7 @@ export class JiraService {
         
         // Gerar Excel (async) e converter Promise em Observable
         return from(
-          this.generateExcel(excelData, filename).then(() => ({
+          this.generateExcel(excelData, filename, onDownloadStart).then(() => ({
             success: true,
             message: `Relatório CONTEC gerado com sucesso! ${excelData.length} cartões exportados.`,
             count: excelData.length
@@ -254,5 +259,22 @@ export class JiraService {
         );
       })
     );
+  }
+
+  /**
+   * Reprograma múltiplas issues do Jira com nova data
+   */
+  reprogramarEmMassa(ids: string[], date: string): Observable<any> {
+    console.log('🚀 [JiraService] reprogramarEmMassa iniciado');
+    console.log('📋 IDs:', ids);
+    console.log('📅 Data:', date);
+
+    const token = localStorage.getItem('token');
+    const headers = new HttpHeaders({
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    });
+
+    return this.http.post(`${this.apiUrl}/jira/reprogramar-massa`, { ids, date }, { headers });
   }
 }
