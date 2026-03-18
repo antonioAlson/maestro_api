@@ -1,19 +1,64 @@
 <div class="acompanhamento-container">
   <header class="acompanhamento-header">
     <div class="header-content">
-      <h1>Acompanhamento</h1>
+      <h1>Acompanhamento PCP</h1>
       <img src="opera.png" alt="Opera" class="header-brand" />
     </div>
   </header>
 
   <main class="acompanhamento-content">
-    <div class="content-placeholder">
-      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#9c27b0" stroke-width="2">
-        <path d="M9 11l3 3L22 4"></path>
-        <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path>
-      </svg>
-      <h2>Acompanhamento PCP</h2>
-      <p>Módulo em desenvolvimento</p>
+    <div class="kanban-board">
+      <div class="kanban-column" *ngFor="let column of columns">
+        <div class="column-header">
+          <h3>{{ column.title }}</h3>
+          <span class="card-count">{{ column.cards.length }}</span>
+        </div>
+        
+        <div 
+          class="column-content"
+          (dragover)="onDragOver($event)"
+          (drop)="onDrop($event, column.id)"
+        >
+          <div 
+            class="kanban-card"
+            *ngFor="let card of column.cards"
+            draggable="true"
+            (dragstart)="onDragStart($event, card, column.id)"
+            (dragend)="onDragEnd()"
+            [class.contec-card]="isContecVehicle(card.veiculo)"
+          >
+            <div class="card-numero">{{ card.numero }}</div>
+            
+            <div class="card-title">{{ card.title }}</div>
+            
+            <div class="card-status">
+              <span class="status-indicator" [class]="'status-' + (card.situacao?.includes('LIBERADO') ? 'green' : card.situacao?.includes('Aguardando') ? 'gray' : 'blue')"></span>
+              <span class="status-text">{{ card.situacao }}</span>
+            </div>
+            
+            <div class="card-footer">
+              <span class="card-id-badge">{{ card.id }}</span>
+              <div class="card-date">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                  <line x1="16" y1="2" x2="16" y2="6"></line>
+                  <line x1="8" y1="2" x2="8" y2="6"></line>
+                  <line x1="3" y1="10" x2="21" y2="10"></line>
+                </svg>
+                <span>{{ card.previsao }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="empty-state" *ngIf="column.cards.length === 0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="2">
+              <path d="M9 11l3 3L22 4"></path>
+              <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path>
+            </svg>
+            <p>Nenhum item</p>
+          </div>
+        </div>
+      </div>
     </div>
   </main>
 </div>
