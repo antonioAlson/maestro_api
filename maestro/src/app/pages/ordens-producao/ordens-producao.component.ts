@@ -1,4 +1,4 @@
-import { Component, OnInit, HostListener } from '@angular/core';
+import { Component, OnInit, HostListener, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { JiraService } from '../../services/jira.service';
@@ -51,7 +51,10 @@ export class OrdensProducaoComponent implements OnInit {
   private readonly downloadBatchSize = 15; // Downloads simultâneos (otimizado de 5 para 15)
   private processingGuardTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private jiraService: JiraService) {}
+  constructor(
+    private jiraService: JiraService,
+    private cdr: ChangeDetectorRef
+  ) {}
 
   ngOnInit(): void {
   }
@@ -148,6 +151,7 @@ export class OrdensProducaoComponent implements OnInit {
     this.resultMessage = 'Carregando...';
     this.resultType = '';
     this.isLoadingIssues = true;
+    this.refreshView();
     
     // Buscar todas as issues (não apenas sem data) após o modal estar renderizado
     setTimeout(() => {
@@ -172,6 +176,7 @@ export class OrdensProducaoComponent implements OnInit {
         take(1),
         finalize(() => {
           this.isLoadingIssues = false;
+          this.refreshView();
         })
       )
       .subscribe({
@@ -193,6 +198,7 @@ export class OrdensProducaoComponent implements OnInit {
             this.resultMessage = 'Nenhum cartão encontrado';
             this.resultType = 'error';
           }
+          this.refreshView();
         },
         error: (error) => {
           this.issuesSemData = [];
@@ -202,6 +208,7 @@ export class OrdensProducaoComponent implements OnInit {
           } else {
             this.resultMessage = error.error?.message || 'Erro ao buscar cartões';
           }
+          this.refreshView();
         }
       });
   }
@@ -300,6 +307,14 @@ export class OrdensProducaoComponent implements OnInit {
     
     issue.novaData = formatted;
     input.value = formatted;
+  }
+
+  private refreshView(): void {
+    try {
+      this.cdr.detectChanges();
+    } catch {
+      // Ignora se o detector não estiver disponível durante transição de view.
+    }
   }
 
   onPrintIdsInput(): void {
