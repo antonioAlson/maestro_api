@@ -8,7 +8,7 @@ import jiraRoutes from './routes/jira.js';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // Middlewares
 app.use(cors({
@@ -58,12 +58,28 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Iniciar servidor
-app.listen(PORT, () => {
-  console.log('🚀 Servidor rodando na porta:', PORT);
-  console.log(`📡 API disponível em: http://localhost:${PORT}`);
-  console.log(`🌍 Ambiente: ${process.env.NODE_ENV || 'development'}`);
-});
+// Iniciar servidor com fallback de porta para desenvolvimento
+function startServer(initialPort) {
+  const server = app.listen(initialPort, () => {
+    console.log('🚀 Servidor rodando na porta:', initialPort);
+    console.log(`📡 API disponível em: http://localhost:${initialPort}`);
+    console.log(`🌍 Ambiente: ${process.env.NODE_ENV || 'development'}`);
+  });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      const nextPort = initialPort + 1;
+      console.error(`⚠️ Porta ${initialPort} em uso. Tentando porta ${nextPort}...`);
+      startServer(nextPort);
+      return;
+    }
+
+    console.error('❌ Erro ao iniciar servidor:', err);
+    process.exit(1);
+  });
+}
+
+startServer(PORT);
 
 // Tratamento de erros não capturados
 process.on('unhandledRejection', (err) => {

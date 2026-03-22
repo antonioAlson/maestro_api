@@ -162,6 +162,17 @@
     background: #eff6ff;
   }
 
+  &.tensylon {
+    border-color: #fdba74;
+    background: #fff7ed;
+    color: #9a3412;
+
+    &:hover {
+      border-color: #fb923c;
+      background: #ffedd5;
+    }
+  }
+
   &.marked {
     border-color: #1d4ed8;
     background: #dbeafe;

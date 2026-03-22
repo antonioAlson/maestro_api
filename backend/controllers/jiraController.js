@@ -1,15 +1,331 @@
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
+import QRCode from 'qrcode';
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import ImageModule from 'docxtemplater-image-module-free';
-import QRCode from 'qrcode';
+import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Cria PDF idêntico ao template Word original
+async function criarEspelhoPdfDoCodigo(cardData) {
+  try {
+    console.log('📄 [1/7] Iniciando criação do PDF...');
+    const pdfDoc = await PDFDocument.create();
+    const page = pdfDoc.addPage([595.28, 841.89]); // A4 em pontos
+    const { width, height } = page.getSize();
+    console.log('✅ [2/7] PDF criado, página adicionada');
+    
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    console.log('✅ [3/7] Fontes carregadas');
+    
+    const backendRoot = path.join(__dirname, '..');
+    const footerCandidates = [
+      path.join(backendRoot, 'scripts', 'projetos', 'logo-footer.png'),
+      path.join(backendRoot, 'scripts', 'projetos', 'footer.png')
+    ];
+    const footerPath = footerCandidates.find((candidate) => fs.existsSync(candidate));
+    const topLogoPath = path.join(backendRoot, 'scripts', 'projetos', 'logo.png');
+    
+    const dataAtual = new Date().toLocaleDateString('pt-BR');
+  
+  // Margens
+  const marginLeft = 58;
+  
+  // Logo OPERA no topo central
+  let yPos = height - 100;
+  if (fs.existsSync(topLogoPath)) {
+    try {
+      let topLogoBytes = await fs.promises.readFile(topLogoPath);
+      const isBase64TopLogo = topLogoBytes.toString('utf8', 0, 8).startsWith('iVBORw0K');
+
+      if (isBase64TopLogo) {
+        topLogoBytes = Buffer.from(topLogoBytes.toString('utf8'), 'base64');
+      }
+
+      const topLogoImage = await pdfDoc.embedPng(topLogoBytes);
+      const topLogoDims = topLogoImage.scale(1);
+      const topLogoWidth = 130;
+      const topLogoHeight = (topLogoDims.height / topLogoDims.width) * topLogoWidth;
+
+      page.drawImage(topLogoImage, {
+        x: (width - topLogoWidth) / 2,
+        y: yPos - 10,
+        width: topLogoWidth,
+        height: topLogoHeight,
+        opacity: 1
+      });
+      yPos -= 18;
+    } catch (topLogoError) {
+      page.drawText('OPERA', {
+        x: width / 2 - 30,
+        y: yPos,
+        size: 16,
+        font: fontBold,
+        color: rgb(0.4, 0.6, 0.8)
+      });
+
+      yPos -= 15;
+      page.drawText('Armouring Materials', {
+        x: width / 2 - 45,
+        y: yPos,
+        size: 9,
+        font: font,
+        color: rgb(0.5, 0.5, 0.5)
+      });
+    }
+  } else {
+    page.drawText('OPERA', {
+      x: width / 2 - 30,
+      y: yPos,
+      size: 16,
+      font: fontBold,
+      color: rgb(0.4, 0.6, 0.8)
+    });
+
+    yPos -= 15;
+    page.drawText('Armouring Materials', {
+      x: width / 2 - 45,
+      y: yPos,
+      size: 9,
+      font: font,
+      color: rgb(0.5, 0.5, 0.5)
+    });
+  }
+  
+  const cardIdentifier = `${cardData.id || ''} ${cardData.numeroOrdem || ''} ${cardData.numeroProjeto || ''}`;
+  const isTensylonCard = /TENSYLON/i.test(cardIdentifier);
+  const tensylonTitleSize = 21;
+
+  // Logo Tensylon
+  yPos -= 50;
+  if (isTensylonCard) {
+    const tensylonText = 'Tensylon';
+    const tensylonTextWidth = fontBold.widthOfTextAtSize(tensylonText, tensylonTitleSize);
+    const tensylonX = width / 2 - 40;
+
+    page.drawRectangle({
+      x: tensylonX - 8,
+      y: yPos - 4,
+      width: tensylonTextWidth + 16,
+      height: tensylonTitleSize + 7,
+      color: rgb(1, 0.86, 0.64)
+    });
+  }
+
+  page.drawText('Tensylon', {
+    x: width / 2 - 40,
+    y: yPos,
+    size: tensylonTitleSize,
+    font: fontBold,
+    color: rgb(0, 0, 0)
+  });
+  
+  // Campos do documento
+  yPos -= 60;
+  const lineHeight = 50;
+  const labelSize = 19;
+  const valueSize = 19;
+  
+  const fields = [
+    { label: 'Modelo:', value: cardData.modeloVeiculo },
+    { label: 'Tipo De Teto:', value: cardData.tipoTeto },
+    { label: 'Ano:', value: cardData.anoVeiculo },
+    { label: 'Projeto:', value: cardData.numeroProjeto },
+    { label: 'Data:', value: dataAtual },
+    { label: 'Quantidade de peças:', value: '' },
+    { label: 'OS:', value: cardData.numeroOrdem }
+  ];
+  
+  fields.forEach(field => {
+    const labelText = String(field.label || '');
+    const valueText = String(field.value || '');
+
+    page.drawText(labelText, {
+      x: marginLeft,
+      y: yPos,
+      size: labelSize,
+      font: fontBold,
+      color: rgb(0, 0, 0)
+    });
+
+    const labelWidth = fontBold.widthOfTextAtSize(labelText, labelSize);
+    page.drawText(valueText, {
+      x: marginLeft + labelWidth + 6,
+      y: yPos,
+      size: valueSize,
+      font: font,
+      color: rgb(0, 0, 0)
+    });
+    
+    yPos -= lineHeight;
+  });
+  console.log('✅ [5/7] Campos do documento desenhados');
+  
+  // Gera e adiciona QR code centralizado
+  console.log('📄 [6/7] Gerando QR code...');
+  const qrPayload = [
+    cardData.modeloVeiculo,
+    cardData.tipoTeto,
+    cardData.anoVeiculo,
+    cardData.numeroProjeto,
+    cardData.numeroOrdem
+  ].filter((v) => String(v || '').trim().length > 0).join('\n');
+  
+  const qrCodeDataUrl = await QRCode.toDataURL(qrPayload || cardData.id || '', { 
+    margin: 1, 
+    width: 300 
+  });
+  const qrImageBytes = Buffer.from(qrCodeDataUrl.split(',')[1], 'base64');
+  const qrImage = await pdfDoc.embedPng(qrImageBytes);
+  
+  yPos -= 30;
+  const qrSize = 92;
+  const qrX = width / 2 - qrSize / 2;
+  const qrY = yPos - qrSize;
+  
+  // Fundo do rodapé (arte completa)
+  if (footerPath) {
+    try {
+      let logoBytes = await fs.promises.readFile(footerPath);
+      const isBase64 = logoBytes.toString('utf8', 0, 8).startsWith('iVBORw0K');
+
+      if (isBase64) {
+        logoBytes = Buffer.from(logoBytes.toString('utf8'), 'base64');
+      }
+
+      const logoImage = await pdfDoc.embedPng(logoBytes);
+      const logoDims = logoImage.scale(1);
+      const footerWidth = width;
+      const footerHeight = (logoDims.height / logoDims.width) * footerWidth;
+
+      page.drawImage(logoImage, {
+        x: 0,
+        y: 0,
+        width: footerWidth,
+        height: footerHeight,
+        opacity: 0.9
+      });
+      console.log('✅ [7/7] Arte do rodapé adicionada');
+    } catch (logoError) {
+      console.warn('⚠️ Não foi possível adicionar o logo no rodapé:', logoError?.message || String(logoError));
+    }
+  }
+
+  // Rodapé com informações de contato
+  const footerY = 80;
+  page.drawText('Avenida Tucunaré 421', {
+    x: marginLeft - 28,
+    y: footerY,
+    size: 7,
+    font: font,
+    color: rgb(0.36, 0.36, 0.36)
+  });
+  
+  page.drawText('Tamboré • Barueri – SP', {
+    x: marginLeft - 28,
+    y: footerY - 10,
+    size: 7,
+    font: font,
+    color: rgb(0.36, 0.36, 0.36)
+  });
+  
+  page.drawText('CEP 06460-020', {
+    x: marginLeft - 28,
+    y: footerY - 20,
+    size: 7,
+    font: font,
+    color: rgb(0.36, 0.36, 0.36)
+  });
+  
+  page.drawText('+55 11 0000 0000', {
+    x: marginLeft - 28,
+    y: footerY - 30,
+    size: 7,
+    font: font,
+    color: rgb(0.36, 0.36, 0.36)
+  });
+  
+  page.drawText('www.operacomposite.com', {
+    x: marginLeft - 28,
+    y: footerY - 40,
+    size: 7,
+    font: font,
+    color: rgb(0.36, 0.36, 0.36)
+  });
+
+  // Ícones sociais abaixo do site
+  const iconsY = footerY - 56;
+  const iconRadius = 7;
+  const iconGap = 20;
+  const iconStartX = marginLeft - 21;
+  const iconFill = rgb(0.08, 0.36, 0.56);
+  const iconTextColor = rgb(1, 1, 1);
+  const socialIcons = [
+    { label: 'IG', size: 5.2 },
+    { label: 'f', size: 8.5 },
+    { label: 'YT', size: 4.8 },
+    { label: 'in', size: 5.6 }
+  ];
+
+  socialIcons.forEach((icon, idx) => {
+    const cx = iconStartX + (idx * iconGap);
+    page.drawCircle({
+      x: cx,
+      y: iconsY,
+      size: iconRadius,
+      color: iconFill
+    });
+
+    const textWidth = fontBold.widthOfTextAtSize(icon.label, icon.size);
+    page.drawText(icon.label, {
+      x: cx - (textWidth / 2),
+      y: iconsY - (icon.size / 3),
+      size: icon.size,
+      font: fontBold,
+      color: iconTextColor
+    });
+  });
+  
+  page.drawText(`Fo 22.1 – Rev.0`, {
+    x: width - 320,
+    y: footerY - 10,
+    size: 7,
+    font: font,
+    color: rgb(0.42, 0.42, 0.42)
+  });
+
+  // Desenha o QR por último para ficar sobreposto
+  page.drawImage(qrImage, {
+    x: qrX,
+    y: qrY,
+    width: qrSize,
+    height: qrSize
+  });
+  console.log('✅ [6/7] QR code adicionado (sobreposto)');
+
+  // Converte Uint8Array para Buffer
+  console.log('📄 [7/7] Salvando PDF...');
+  const pdfBytes = await pdfDoc.save();
+  console.log('✅ [7/7] PDF salvo com sucesso, tamanho:', pdfBytes.length, 'bytes');
+  return Buffer.from(pdfBytes);
+  } catch (error) {
+    console.error('❌ ERRO CAPTURADO AO CRIAR PDF:');
+    console.error('  - Tipo:', typeof error);
+    console.error('  - Message:', error?.message || 'SEM MENSAGEM');
+    console.error('  - Stack:', error?.stack || 'SEM STACK');
+    console.error('  - Error completo:', error);
+    throw new Error(error?.message || `Erro desconhecido ao criar PDF: ${String(error)}`);
+  }
+}
 
 function formatJiraDate(rawDate) {
   if (!rawDate) return '';
@@ -1204,13 +1520,13 @@ async function buscarDadosCardEspelho(cardId) {
 }
 
 /**
- * Gera documento docx de espelho com base no template.
+ * Gera documento DOCX de espelho com base no template original.
  */
 async function gerarEspelhoDocx(templatePath, cardData) {
   const templateBuffer = await fs.promises.readFile(templatePath);
   const zip = new PizZip(templateBuffer);
 
-  // Converte o placeholder de QR para tag de imagem, sem exigir edição manual do template.
+  // Converte placeholder textual para placeholder de imagem do QR.
   const mainDocument = zip.file('word/document.xml');
   if (mainDocument) {
     const xml = mainDocument.asText();
@@ -1228,7 +1544,7 @@ async function gerarEspelhoDocx(templatePath, cardData) {
       return Buffer.from(base64, 'base64');
     },
     getSize() {
-      return [180, 180];
+      return [110, 110];
     }
   });
 
@@ -1236,12 +1552,10 @@ async function gerarEspelhoDocx(templatePath, cardData) {
     modules: [imageModule],
     paragraphLoop: true,
     linebreaks: true,
-    // O template default.docx usa placeholders no formato {{ CAMPO }}.
     delimiters: {
       start: '{{',
       end: '}}'
     },
-    // Garante que tags com espaços sejam resolvidas corretamente.
     parser(tag) {
       const cleanTag = String(tag || '').trim();
       const key = cleanTag.startsWith('%') ? cleanTag.slice(1).trim() : cleanTag;
@@ -1268,7 +1582,7 @@ async function gerarEspelhoDocx(templatePath, cardData) {
 
   const qrCodeDataUrl = await QRCode.toDataURL(qrPayload || cardData.id || '', {
     margin: 1,
-    width: 420
+    width: 260
   });
 
   doc.render({
@@ -1285,17 +1599,160 @@ async function gerarEspelhoDocx(templatePath, cardData) {
   return doc.getZip().generate({ type: 'nodebuffer' });
 }
 
+async function runCommand(command, args) {
+  return await new Promise((resolve, reject) => {
+    const child = spawn(command, args, { windowsHide: true });
+    let stderr = '';
+
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    child.on('error', (error) => reject(error));
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(stderr || `Falha ao executar ${command} (code ${code})`));
+      }
+    });
+  });
+}
+
+function escapePowerShellString(value) {
+  return String(value || '').replace(/'/g, "''");
+}
+
+async function converterDocxParaPdfViaWord(inputPath, outputPath) {
+  const inPath = escapePowerShellString(inputPath);
+  const outPath = escapePowerShellString(outputPath);
+
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    `$inputPath = '${inPath}'`,
+    `$outputPath = '${outPath}'`,
+    '$word = $null',
+    '$doc = $null',
+    'try {',
+    '  $word = New-Object -ComObject Word.Application',
+    '  $word.Visible = $false',
+    '  $doc = $word.Documents.Open($inputPath, $false, $true)',
+    '  $wdFormatPDF = 17',
+    '  $doc.SaveAs([ref]$outputPath, [ref]$wdFormatPDF)',
+    '} finally {',
+    '  if ($doc -ne $null) { $doc.Close() }',
+    '  if ($word -ne $null) { $word.Quit() }',
+    '}'
+  ].join('; ');
+
+  await runCommand('powershell', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-Command',
+    script
+  ]);
+}
+
+function resolveLibreOfficeCandidates() {
+  const explicitPath = String(process.env.LIBREOFFICE_PATH || '').trim();
+  if (explicitPath) {
+    return [explicitPath];
+  }
+
+  const candidates = ['soffice', 'soffice.exe'];
+
+  if (process.platform === 'win32') {
+    const baseDirs = [
+      process.env['ProgramFiles'],
+      process.env['ProgramFiles(x86)'],
+      process.env.LOCALAPPDATA
+    ].filter(Boolean);
+
+    for (const baseDir of baseDirs) {
+      candidates.push(path.join(baseDir, 'LibreOffice', 'program', 'soffice.exe'));
+    }
+  }
+
+  return candidates;
+}
+
+async function converterDocxParaPdf(docxBuffer, baseName) {
+  const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'espelho-pdf-'));
+  const safeName = sanitizeFileName(baseName || 'espelho');
+  const inputPath = path.join(tmpDir, `${safeName}.docx`);
+  const outputPath = path.join(tmpDir, `${safeName}.pdf`);
+
+  try {
+    await fs.promises.writeFile(inputPath, docxBuffer);
+
+    const candidates = resolveLibreOfficeCandidates();
+
+    let converted = false;
+    let lastError = null;
+
+    for (const candidate of candidates) {
+      const isNamedCommand = !candidate.includes(path.sep);
+      if (!isNamedCommand && !fs.existsSync(candidate)) {
+        continue;
+      }
+
+      try {
+        await runCommand(candidate, [
+          '--headless',
+          '--convert-to',
+          'pdf',
+          '--outdir',
+          tmpDir,
+          inputPath
+        ]);
+        converted = true;
+        break;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    if (!converted && process.platform === 'win32') {
+      try {
+        await converterDocxParaPdfViaWord(inputPath, outputPath);
+        converted = true;
+      } catch (wordError) {
+        lastError = wordError;
+      }
+    }
+
+    if (!converted) {
+      const guidance = process.platform === 'win32'
+        ? 'Instale o LibreOffice, defina LIBREOFFICE_PATH (ex: C:\\Program Files\\LibreOffice\\program\\soffice.exe) ou tenha Microsoft Word instalado.'
+        : 'Instale o LibreOffice/soffice e garanta que o binario esteja no PATH.';
+      throw new Error(`Nao foi possivel converter DOCX para PDF. ${guidance} ${lastError?.message || ''}`.trim());
+    }
+
+    if (!fs.existsSync(outputPath)) {
+      throw new Error('Conversao concluida sem gerar arquivo PDF de saida.');
+    }
+
+    return await fs.promises.readFile(outputPath);
+  } finally {
+    await fs.promises.rm(tmpDir, { recursive: true, force: true });
+  }
+}
+
 /**
  * Gera espelhos nativamente no backend Node.js para múltiplos cards.
  */
 export const gerarEspelhos = async (req, res) => {
   try {
-    const { ids } = req.body;
+    const ids = Array.isArray(req.body?.ids)
+      ? req.body.ids
+      : (req.body?.cardId ? [req.body.cardId] : []);
 
-    if (!Array.isArray(ids) || ids.length === 0) {
+    if (ids.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Informe ao menos um ID para gerar espelhos.'
+        message: 'Informe o cardId para gerar espelho.'
       });
     }
 
@@ -1318,24 +1775,42 @@ export const gerarEspelhos = async (req, res) => {
     }
 
     const backendRoot = path.join(__dirname, '..');
-    const templatePath = path.join(backendRoot, 'scripts', 'projetos', 'default.docx');
-
-    if (!fs.existsSync(templatePath)) {
-      return res.status(500).json({
-        success: false,
-        message: `Template não encontrado em ${templatePath}`
-      });
-    }
 
     const cardId = normalizedIds[0];
     const cardData = await buscarDadosCardEspelho(cardId);
     const numeroOrdem = sanitizeFileName(String(cardData.numeroOrdem || cardId));
     const data = new Date().toLocaleDateString('pt-BR').replace(/\//g, '.');
     const hora = new Date().toTimeString().slice(0, 5).replace(':', '-');
-    const downloadName = `${numeroOrdem} ${data} ${hora}.docx`;
-    const generatedBuffer = await gerarEspelhoDocx(templatePath, cardData);
+    const baseFileName = `${numeroOrdem} ${data} ${hora}`;
+    let generatedBuffer;
+    let contentType = 'application/pdf';
+    let downloadName = `${baseFileName}.pdf`;
 
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    try {
+      generatedBuffer = await criarEspelhoPdfDoCodigo(cardData);
+      
+      // Salva PDF gerado em disco para depuração
+      const debugPdfPath = path.join(backendRoot, 'scripts', 'projetos', `${baseFileName}-debug.pdf`);
+      try {
+        await fs.promises.writeFile(debugPdfPath, generatedBuffer);
+        console.log('✅ PDF gerado salvo para depuração em:', debugPdfPath);
+      } catch (debugErr) {
+        console.warn('⚠️ Falha ao salvar PDF para depuração:', debugErr.message);
+      }
+    } catch (pdfError) {
+      console.error('❌ Erro ao gerar PDF:', pdfError.message);
+      return res.status(500).json({
+        success: false,
+        message: `Erro ao gerar PDF: ${pdfError.message}`
+      });
+    }
+
+    // Mantem compatibilidade com upload, mas sem anexacao para preservar layout do template.
+    if (Array.isArray(req.files) && req.files.length > 0) {
+      res.setHeader('X-Attachments-Ignored', 'true');
+    }
+
+    res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
     return res.status(200).send(generatedBuffer);
   } catch (error) {

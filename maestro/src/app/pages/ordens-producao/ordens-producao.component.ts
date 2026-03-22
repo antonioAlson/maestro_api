@@ -90,7 +90,7 @@ export class OrdensProducaoComponent implements OnInit {
   }> = [];
   isLoadingIssues = false;
   
-  private readonly feedbackDelayMs = 3000;
+  private readonly feedbackDelayMs = 6000;
   private readonly requestTimeoutMs = 60000; // 1 minuto (otimizado)
   private readonly downloadBatchSize = 15; // Downloads simultâneos (otimizado de 5 para 15)
   private processingGuardTimer: ReturnType<typeof setTimeout> | null = null;
@@ -944,9 +944,19 @@ export class OrdensProducaoComponent implements OnInit {
     }
   }
 
-  private startProcessingGuard(): void {
+  private getReprogramTimeoutMs(cardCount: number): number {
+    // O backend processa cards em sequência e pode levar vários minutos em lotes maiores.
+    const perCardMs = 50000;
+    const bufferMs = 30000;
+    const estimated = cardCount * perCardMs + bufferMs;
+    const maxTimeoutMs = 30 * 60 * 1000;
+
+    return Math.min(Math.max(this.requestTimeoutMs, estimated), maxTimeoutMs);
+  }
+
+  private startProcessingGuard(guardTimeoutMs?: number): void {
     this.clearProcessingGuard();
-    const guardTimeout = this.requestTimeoutMs + 10000; // 10s após o timeout da requisição
+    const guardTimeout = guardTimeoutMs ?? (this.requestTimeoutMs + 10000);
     console.log(`⏰ Watchdog iniciado: ${guardTimeout / 1000}s`);
     
     this.processingGuardTimer = setTimeout(() => {
@@ -969,13 +979,16 @@ export class OrdensProducaoComponent implements OnInit {
     }
   }
 
-  private scheduleResetAfterFeedback(): void {
+  private scheduleResetAfterFeedback(closeModal: boolean = true): void {
     setTimeout(() => {
-      this.closeReprogramModal();
-      this.idsInput = '';
-      this.dateInput = '';
+      if (closeModal) {
+        this.closeReprogramModal();
+        this.idsInput = '';
+        this.dateInput = '';
+      }
       this.resultMessage = '';
       this.resultType = '';
+      this.refreshView();
     }, this.feedbackDelayMs);
   }
 
@@ -1164,24 +1177,27 @@ export class OrdensProducaoComponent implements OnInit {
       }
     }
 
+    const operationTimeoutMs = this.getReprogramTimeoutMs(ids.length);
+
     this.isProcessing = true;
     this.resultMessage = isRemovingDates
       ? `Removendo data de ${ids.length} ${ids.length === 1 ? 'card' : 'cards'}... Aguarde.`
       : `Processando ${ids.length} ${ids.length === 1 ? 'card' : 'cards'}... Aguarde.`;
     this.resultType = '';
-    this.startProcessingGuard();
+    this.startProcessingGuard(operationTimeoutMs + 15000);
 
     console.log('📡 Enviando requisição para backend...');
-    console.log('⏱️ Timeout configurado:', this.requestTimeoutMs / 1000, 'segundos');
+    console.log('⏱️ Timeout configurado:', operationTimeoutMs / 1000, 'segundos');
     
     this.jiraService.reprogramarEmMassa(ids, date)
       .pipe(
-        timeout(this.requestTimeoutMs),
+        timeout(operationTimeoutMs),
         take(1),
         finalize(() => {
           console.log('🏁 Finalize executado - parando loading');
           this.isProcessing = false;
           this.clearProcessingGuard();
+          this.refreshView();
         })
       )
       .subscribe({
@@ -1203,7 +1219,8 @@ export class OrdensProducaoComponent implements OnInit {
             this.resultMessage = response?.message || 'Erro ao reprogramar';
           }
 
-          this.scheduleResetAfterFeedback();
+          this.refreshView();
+          this.scheduleResetAfterFeedback(true);
         },
         error: (error) => {
           console.error('❌ Erro capturado:', error);
@@ -1212,8 +1229,8 @@ export class OrdensProducaoComponent implements OnInit {
           this.resultType = 'error';
 
           if (error?.name === 'TimeoutError') {
-            console.error('⏱️ TIMEOUT: Operação excedeu', this.requestTimeoutMs / 1000, 'segundos');
-            this.resultMessage = `Tempo limite excedido (${this.requestTimeoutMs / 1000}s). A operação pode ainda estar em andamento no servidor. Verifique o Jira.`;
+            console.error('⏱️ TIMEOUT: Operação excedeu', operationTimeoutMs / 1000, 'segundos');
+            this.resultMessage = `Tempo limite excedido (${operationTimeoutMs / 1000}s). A operação pode ainda estar em andamento no servidor. Verifique o Jira.`;
           } else if (error?.status === 0) {
             console.error('🔌 CONEXÃO: Sem resposta do servidor');
             this.resultMessage = 'Não foi possível conectar ao servidor. Verifique sua conexão.';
@@ -1221,7 +1238,8 @@ export class OrdensProducaoComponent implements OnInit {
             this.resultMessage = error.error?.message || error?.message || 'Erro ao conectar com o servidor';
           }
 
-          this.scheduleResetAfterFeedback();
+          this.refreshView();
+          this.scheduleResetAfterFeedback(false);
         }
       });
   }

@@ -1,4 +1,4 @@
-import { Component, OnInit, ChangeDetectorRef, ElementRef, ViewChild } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { finalize, take, timeout } from 'rxjs/operators';
 import { JiraService } from '../../services/jira.service';
@@ -23,19 +23,15 @@ interface EspelhoItemDisplay {
   styleUrl: './projetos-espelhos.component.scss'
 })
 export class ProjetosEspelhosComponent implements OnInit {
-  @ViewChild('cardFilePicker') cardFilePicker?: ElementRef<HTMLInputElement>;
-
   aguardandoProjetoItems: EspelhoItem[] = [];
   liberadosItems: EspelhoItem[] = [];
   isLoadingAguardandoProjeto = false;
   loadErrorAguardandoProjeto = '';
-  selectedCardIdForUpload: string | null = null;
   isGeneratingEspelhos = false;
   generateMessage = '';
   generateMessageType: 'success' | 'error' | '' = '';
 
   private markedCardIds = new Set<string>();
-  private cardFilesMap = new Map<string, File[]>();
 
   private readonly requestTimeoutMs = 60000;
 
@@ -136,32 +132,12 @@ export class ProjetosEspelhosComponent implements OnInit {
       return;
     }
 
-    this.selectedCardIdForUpload = item.id;
-    const input = this.cardFilePicker?.nativeElement;
-    if (!input) {
-      return;
+    if (this.markedCardIds.has(item.id)) {
+      this.markedCardIds.delete(item.id);
+    } else {
+      this.markedCardIds.add(item.id);
     }
 
-    // Reset para permitir selecionar os mesmos arquivos novamente.
-    input.value = '';
-    input.click();
-  }
-
-  onCardFilesSelected(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const files = Array.from(input.files || []);
-    const targetCardId = this.selectedCardIdForUpload;
-
-    if (!targetCardId) {
-      return;
-    }
-
-    if (files.length > 0) {
-      this.cardFilesMap.set(targetCardId, files);
-      this.markedCardIds.add(targetCardId);
-    }
-
-    this.selectedCardIdForUpload = null;
     this.refreshView();
   }
 

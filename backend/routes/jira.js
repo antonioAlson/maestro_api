@@ -34,7 +34,7 @@ router.get('/download-arquivo/:cardId/:directory/*', authenticate, downloadArqui
 // Download de anexo do Jira
 router.get('/download-arquivo-jira/:cardId/:attachmentId/:filename', authenticate, downloadArquivoJira);
 
-// Gerar espelhos (script Python)
+// Gerar espelho
 router.post('/gerar-espelhos', authenticate, gerarEspelhos);
 
 export default router;

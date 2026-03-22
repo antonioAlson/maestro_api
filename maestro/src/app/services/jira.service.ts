@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpResponse } from '@angular/common/http';
 import { Observable, switchMap, from, tap, of } from 'rxjs';
-import { catchError, concatMap, map, toArray } from 'rxjs/operators';
+import { catchError, map, mergeMap, toArray } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 import * as ExcelJS from 'exceljs';
 
@@ -389,13 +389,15 @@ export class JiraService {
       });
     }
 
+    const parallelism = 3;
+
     return from(normalizedIds).pipe(
-      concatMap((id) => this.http.post(`${this.apiUrl}/jira/gerar-espelhos`, { ids: [id] }, {
+      mergeMap((id) => this.http.post(`${this.apiUrl}/jira/gerar-espelhos`, { ids: [id] }, {
         observe: 'response',
         responseType: 'blob'
       }).pipe(
         map((response: HttpResponse<Blob>) => {
-          this.saveBlobResponse(response, `espelho-${id}.docx`);
+          this.saveBlobResponse(response, `espelho-${id}.pdf`);
           return { id, success: true as const };
         }),
         catchError((error) => {
@@ -406,7 +408,7 @@ export class JiraService {
             message: error?.error?.message || error?.message || 'Erro ao gerar espelho.'
           });
         })
-      )),
+      ), parallelism),
       toArray(),
       map((results) => {
         const successItems = results.filter((item) => item.success);
@@ -443,7 +445,7 @@ export class JiraService {
     }
 
     const contentDisposition = response.headers.get('content-disposition') || '';
-    const filename = this.extractFilename(contentDisposition, fallbackName);
+    const filename = this.extractFilename(contentDisposition, this.inferFilenameByMime(fallbackName, blob.type));
 
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -460,6 +462,21 @@ export class JiraService {
     }
 
     return match[1].trim();
+  }
+
+  private inferFilenameByMime(fallbackName: string, mimeType: string): string {
+    const baseName = fallbackName.replace(/\.(pdf|docx)$/i, '');
+    const mime = String(mimeType || '').toLowerCase();
+
+    if (mime.includes('application/pdf')) {
+      return `${baseName}.pdf`;
+    }
+
+    if (mime.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document')) {
+      return `${baseName}.docx`;
+    }
+
+    return fallbackName;
   }
 
 

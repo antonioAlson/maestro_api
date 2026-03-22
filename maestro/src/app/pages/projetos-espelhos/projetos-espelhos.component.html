@@ -1,12 +1,4 @@
 <div class="espelhos-container">
-  <input
-    #cardFilePicker
-    type="file"
-    multiple
-    class="hidden-file-input"
-    (change)="onCardFilesSelected($event)"
-  />
-
   <header class="espelhos-header">
     <div class="header-content">
       <h1>Espelhos</h1>
@@ -28,6 +20,7 @@
             *ngFor="let item of aguardandoProjetoItems"
             [attr.data-id]="item.id"
             [title]="getAguardandoProjetoDisplay(item).fullText"
+            [class.tensylon]="item.id?.startsWith('TENSYLON-')"
             [class.marked]="isAguardandoCardMarked(item.id)"
             (click)="onAguardandoCardClick(item)"
           >
@@ -59,6 +52,7 @@
             *ngFor="let item of liberadosItems"
             [attr.data-id]="item.id"
             [title]="getAguardandoProjetoDisplay(item).fullText"
+            [class.tensylon]="item.id?.startsWith('TENSYLON-')"
           >
             {{ getAguardandoProjetoDisplay(item).text }}
           </li>
