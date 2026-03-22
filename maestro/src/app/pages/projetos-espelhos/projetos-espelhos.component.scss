@@ -55,7 +55,7 @@
 
 .board-top {
   border-top: 4px solid #2563eb;
-  height: clamp(130px, 14vw, 180px);
+  height: clamp(210px, 26vw, 360px);
 }
 
 .board-bottom {
@@ -73,11 +73,44 @@
   display: block;
 }
 
+.board-tabs {
+  display: flex;
+  gap: 0.45rem;
+  margin-bottom: 0.45rem;
+}
+
+.board-tab {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+  border-radius: 999px;
+  min-height: 2.6rem;
+  padding: 0.55rem 1.2rem;
+  font-size: 0.96rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+
+  &:hover {
+    border-color: #93c5fd;
+    background: #eff6ff;
+    color: #1d4ed8;
+  }
+
+  &.active {
+    border-color: #1d4ed8;
+    background: #dbeafe;
+    color: #1e3a8a;
+    box-shadow: inset 0 0 0 1px #93c5fd;
+  }
+}
+
 .between-boards-actions {
   margin-top: -0.5rem;
   margin-bottom: -0.2rem;
   display: flex;
   justify-content: flex-end;
+  gap: 0.45rem;
 }
 
 .generate-feedback {
@@ -101,13 +134,13 @@
 }
 
 .generate-btn {
-  height: 2rem;
-  padding: 0 0.8rem;
+  min-height: 2.45rem;
+  padding: 0 1.05rem;
   border: 1px solid #c7d2fe;
   border-radius: 0.55rem;
   background: #eef2ff;
   color: #3730a3;
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -120,6 +153,44 @@
   &:disabled {
     opacity: 0.65;
     cursor: not-allowed;
+  }
+}
+
+.select-btn,
+.clear-btn {
+  min-height: 2.9rem;
+  padding: 0 1.35rem;
+  border-radius: 0.55rem;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
+}
+
+.select-btn {
+  border: 1px solid #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+
+  &:hover {
+    background: #dbeafe;
+    border-color: #60a5fa;
+  }
+}
+
+.clear-btn {
+  border: 1px solid #fecaca;
+  background: #fff1f2;
+  color: #be123c;
+
+  &:hover {
+    background: #ffe4e6;
+    border-color: #fda4af;
   }
 }
 
@@ -162,17 +233,6 @@
     background: #eff6ff;
   }
 
-  &.tensylon {
-    border-color: #fdba74;
-    background: #fff7ed;
-    color: #9a3412;
-
-    &:hover {
-      border-color: #fb923c;
-      background: #ffedd5;
-    }
-  }
-
   &.marked {
     border-color: #1d4ed8;
     background: #dbeafe;
@@ -203,5 +263,16 @@
 
   .board-list {
     grid-template-columns: 1fr;
+  }
+
+  .board-tab,
+  .clear-btn {
+    min-height: 3rem;
+    font-size: 1rem;
+  }
+
+  .generate-btn {
+    min-height: 2.45rem;
+    font-size: 0.9rem;
   }
 }

@@ -1,4 +1,5 @@
 import express from 'express';
+import multer from 'multer';
 import { 
   getJiraIssues, 
   getContecIssues, 
@@ -12,6 +13,12 @@ import {
 import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 20 * 1024 * 1024
+  }
+});
 
 // Buscar issues do Jira (requer autenticação)
 router.get('/issues', authenticate, getJiraIssues);
@@ -35,6 +42,6 @@ router.get('/download-arquivo/:cardId/:directory/*', authenticate, downloadArqui
 router.get('/download-arquivo-jira/:cardId/:attachmentId/:filename', authenticate, downloadArquivoJira);
 
 // Gerar espelho
-router.post('/gerar-espelhos', authenticate, gerarEspelhos);
+router.post('/gerar-espelhos', authenticate, upload.single('arquivoProjeto'), gerarEspelhos);
 
 export default router;

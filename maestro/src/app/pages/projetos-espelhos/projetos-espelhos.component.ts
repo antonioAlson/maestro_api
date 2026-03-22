@@ -24,7 +24,7 @@ interface EspelhoItemDisplay {
 })
 export class ProjetosEspelhosComponent implements OnInit {
   aguardandoProjetoItems: EspelhoItem[] = [];
-  liberadosItems: EspelhoItem[] = [];
+  activeAguardandoTab: 'aramida' | 'tenssylon' = 'aramida';
   isLoadingAguardandoProjeto = false;
   loadErrorAguardandoProjeto = '';
   isGeneratingEspelhos = false;
@@ -32,6 +32,8 @@ export class ProjetosEspelhosComponent implements OnInit {
   generateMessageType: 'success' | 'error' | '' = '';
 
   private markedCardIds = new Set<string>();
+  private pendingCardIdForFileSelection: string | null = null;
+  private selectedFilesByCardId = new Map<string, File>();
 
   private readonly requestTimeoutMs = 60000;
 
@@ -76,14 +78,10 @@ export class ProjetosEspelhosComponent implements OnInit {
               previsao: (issue?.previsao || '').toString().trim() || '-'
             }));
 
-          // Temporario: manter a coluna "Liberados" sem carga de itens.
-          this.liberadosItems = [];
-
           this.refreshView();
         },
         error: (error) => {
           this.aguardandoProjetoItems = [];
-          this.liberadosItems = [];
           if (error?.name === 'TimeoutError') {
             this.loadErrorAguardandoProjeto = `Tempo limite excedido (${this.requestTimeoutMs / 1000}s).`;
           } else {
@@ -106,18 +104,6 @@ export class ProjetosEspelhosComponent implements OnInit {
     return normalized === 'a produzir' || normalized.includes('a produzir');
   }
 
-  private isStatusLiberadoEngenharia(status: unknown): boolean {
-    const normalized = (status || '')
-      .toString()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .toLowerCase();
-
-    return normalized === 'liberado engenharia' || normalized.includes('liberado engenharia');
-  }
-
   getAguardandoProjetoDisplay(item: EspelhoItem): EspelhoItemDisplay {
     const resumo = this.abreviarResumo(item.resumo);
     const veiculo = this.abreviarVeiculo(item.veiculo);
@@ -127,16 +113,108 @@ export class ProjetosEspelhosComponent implements OnInit {
     return { text, fullText };
   }
 
-  onAguardandoCardClick(item: EspelhoItem): void {
+  onAguardandoCardClick(item: EspelhoItem, fileInput: HTMLInputElement): void {
     if (!item?.id || this.isLoadingAguardandoProjeto) {
       return;
     }
 
-    if (this.markedCardIds.has(item.id)) {
-      this.markedCardIds.delete(item.id);
-    } else {
-      this.markedCardIds.add(item.id);
+    this.pendingCardIdForFileSelection = item.id;
+    fileInput.value = '';
+    fileInput.click();
+
+    this.refreshView();
+  }
+
+  getSelectedFileNameForCard(cardId: string): string {
+    return this.selectedFilesByCardId.get(cardId)?.name || '';
+  }
+
+  hasSelectedFileForCard(cardId: string): boolean {
+    return this.selectedFilesByCardId.has(cardId);
+  }
+
+  setAguardandoTab(tab: 'aramida' | 'tenssylon'): void {
+    this.activeAguardandoTab = tab;
+    this.refreshView();
+  }
+
+  get filteredAguardandoProjetoItems(): EspelhoItem[] {
+    if (this.activeAguardandoTab === 'tenssylon') {
+      return this.aguardandoProjetoItems.filter((item) => item.id?.toUpperCase().startsWith('TENSYLON-'));
     }
+
+    return this.aguardandoProjetoItems.filter((item) => !item.id?.toUpperCase().startsWith('TENSYLON-'));
+  }
+
+  private associateFileWithPendingCard(file: File): void {
+    const cardId = this.pendingCardIdForFileSelection;
+    this.pendingCardIdForFileSelection = null;
+
+    if (!cardId) {
+      return;
+    }
+
+    this.selectedFilesByCardId.set(cardId, file);
+    this.markedCardIds.add(cardId);
+    this.updateAssociationFeedbackMessage();
+
+    this.refreshView();
+  }
+
+  private updateAssociationFeedbackMessage(): void {
+    const selectedCardIds = Array.from(this.markedCardIds)
+      .filter((id) => this.selectedFilesByCardId.has(id))
+      .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+    if (selectedCardIds.length === 0) {
+      this.generateMessage = '';
+      this.generateMessageType = '';
+      return;
+    }
+
+    const selectedOsNumbers = selectedCardIds.map((id) => this.getOsNumberForCard(id));
+
+    this.generateMessageType = 'success';
+    this.generateMessage = `Cards selecionados: ${selectedOsNumbers.join(', ')}`;
+  }
+
+  private getOsNumberForCard(cardId: string): string {
+    const item = this.aguardandoProjetoItems.find((card) => card.id === cardId);
+    const resumo = String(item?.resumo || '').trim();
+
+    if (!resumo) {
+      return cardId;
+    }
+
+    const digitGroups = resumo.match(/\d+/g);
+    if (digitGroups && digitGroups.length > 0) {
+      return digitGroups[digitGroups.length - 1];
+    }
+
+    return resumo;
+  }
+
+  private buildFilesByCardPayload(ids: string[]): Record<string, File> {
+    return ids.reduce((acc, id) => {
+      const selectedFile = this.selectedFilesByCardId.get(id);
+      if (selectedFile) {
+        acc[id] = selectedFile;
+      }
+      return acc;
+    }, {} as Record<string, File>);
+  }
+
+  private hasFileForAllSelectedCards(ids: string[]): boolean {
+    return ids.every((id) => this.selectedFilesByCardId.has(id));
+  }
+
+  hasAnySelectedFile(): boolean {
+    return this.selectedFilesByCardId.size > 0;
+  }
+
+  private clearSelectedCardsAndFiles(): void {
+    this.markedCardIds.clear();
+    this.selectedFilesByCardId.clear();
 
     this.refreshView();
   }
@@ -149,21 +227,74 @@ export class ProjetosEspelhosComponent implements OnInit {
     return this.markedCardIds.size > 0 && !this.isGeneratingEspelhos;
   }
 
-  gerarEspelhos(): void {
-    const ids = Array.from(this.markedCardIds);
-    if (ids.length === 0) {
+  openProjectFilePicker(fileInput: HTMLInputElement): void {
+    if (this.isGeneratingEspelhos) {
+      return;
+    }
+
+    fileInput.value = '';
+    fileInput.click();
+  }
+
+  onProjectFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0] || null;
+
+    if (!file) {
+      this.pendingCardIdForFileSelection = null;
+      return;
+    }
+
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+      this.pendingCardIdForFileSelection = null;
       this.generateMessageType = 'error';
-      this.generateMessage = 'Selecione ao menos um card para gerar espelhos.';
+      this.generateMessage = 'Selecione um arquivo PDF para juntar com o espelho.';
       this.refreshView();
       return;
     }
 
+    if (this.pendingCardIdForFileSelection) {
+      this.associateFileWithPendingCard(file);
+      return;
+    }
+
+    this.generateMessageType = 'error';
+    this.generateMessage = 'Clique em um card para escolher o PDF desse card.';
+    this.refreshView();
+  }
+
+  clearSelectedProjectFile(): void {
+    this.clearSelectedCardsAndFiles();
+    this.generateMessage = '';
+    this.generateMessageType = '';
+    this.refreshView();
+  }
+
+  gerarEspelhos(): void {
+    const ids = Array.from(this.markedCardIds);
+    if (ids.length === 0) {
+      this.generateMessageType = 'error';
+      this.generateMessage = 'Clique em um card para selecionar o PDF e gerar espelhos.';
+      this.refreshView();
+      return;
+    }
+
+    if (!this.hasFileForAllSelectedCards(ids)) {
+      this.generateMessageType = 'error';
+      this.generateMessage = 'Selecione um PDF para cada card antes de gerar os espelhos.';
+      this.refreshView();
+      return;
+    }
+
+    const filesByCard = this.buildFilesByCardPayload(ids);
+
     this.isGeneratingEspelhos = true;
-    this.generateMessage = 'Gerando espelhos...';
+    this.generateMessage = 'Gerando espelhos e juntando com os PDFs selecionados...';
     this.generateMessageType = '';
     this.refreshView();
 
-    this.jiraService.gerarEspelhos(ids)
+    this.jiraService.gerarEspelhos(ids, null, filesByCard)
       .pipe(
         take(1),
         finalize(() => {
@@ -177,9 +308,11 @@ export class ProjetosEspelhosComponent implements OnInit {
           if (typeof generated === 'number') {
             this.generateMessageType = 'success';
             this.generateMessage = `Espelhos gerados: ${generated}`;
+            this.clearSelectedCardsAndFiles();
           } else {
             this.generateMessageType = 'success';
             this.generateMessage = response?.message || 'Espelhos gerados com sucesso.';
+            this.clearSelectedCardsAndFiles();
           }
           this.refreshView();
         },

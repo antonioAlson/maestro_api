@@ -13,7 +13,8 @@ const PORT = Number(process.env.PORT) || 3000;
 // Middlewares
 app.use(cors({
   origin: '*', // Em produção, especifique a origem do seu frontend
-  credentials: true
+  credentials: true,
+  exposedHeaders: ['Content-Disposition']
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

@@ -372,7 +372,7 @@ export class JiraService {
   /**
    * Gera espelhos para os cards informados.
    */
-  gerarEspelhos(ids: string[]): Observable<any> {
+  gerarEspelhos(ids: string[], arquivoProjeto?: File | null, arquivosPorId?: Record<string, File>): Observable<any> {
     console.log('🧩 [JiraService] gerarEspelhos iniciado');
     console.log('📋 IDs:', ids);
     console.log('🌐 URL:', `${this.apiUrl}/jira/gerar-espelhos`);
@@ -392,33 +392,45 @@ export class JiraService {
     const parallelism = 3;
 
     return from(normalizedIds).pipe(
-      mergeMap((id) => this.http.post(`${this.apiUrl}/jira/gerar-espelhos`, { ids: [id] }, {
-        observe: 'response',
-        responseType: 'blob'
-      }).pipe(
+      mergeMap((id) => {
+        const fileForId = arquivosPorId?.[id] || arquivoProjeto || null;
+        const payload = fileForId
+          ? this.buildEspelhoFormData(id, fileForId)
+          : { ids: [id] };
+
+        return this.http.post(`${this.apiUrl}/jira/gerar-espelhos`, payload, {
+          observe: 'response',
+          responseType: 'blob'
+        }).pipe(
         map((response: HttpResponse<Blob>) => {
-          this.saveBlobResponse(response, `espelho-${id}.pdf`);
+          this.saveBlobResponse(response, fileForId ? `espelho-${id}-projeto.pdf` : `espelho-${id}.pdf`);
           return { id, success: true as const };
         }),
-        catchError((error) => {
-          console.error(`❌ [JiraService] Erro ao gerar espelho ${id}:`, error);
-          return of({
-            id,
-            success: false as const,
-            message: error?.error?.message || error?.message || 'Erro ao gerar espelho.'
-          });
-        })
-      ), parallelism),
+        catchError((error) => this.extractBlobErrorMessage(error).pipe(
+          map((message) => {
+            console.error(`❌ [JiraService] Erro ao gerar espelho ${id}:`, error);
+            return {
+              id,
+              success: false as const,
+              message
+            };
+          })
+        ))
+      );
+      }, parallelism),
       toArray(),
       map((results) => {
         const successItems = results.filter((item) => item.success);
         const failedItems = results.filter((item) => !item.success);
 
+        const hasAnyFile = !!arquivoProjeto || Object.keys(arquivosPorId || {}).length > 0;
+        const actionText = hasAnyFile ? 'Espelhos juntados e baixados' : 'Espelhos baixados';
+
         return {
           success: failedItems.length === 0,
           message: failedItems.length === 0
-            ? `Espelhos baixados: ${successItems.length}`
-            : `Espelhos baixados: ${successItems.length}. Falhas: ${failedItems.length}`,
+            ? `${actionText}: ${successItems.length}`
+            : `${actionText}: ${successItems.length}. Falhas: ${failedItems.length}`,
           data: {
             processed: results.length,
             generated: successItems.length,
@@ -435,6 +447,38 @@ export class JiraService {
           console.error('❌ [JiraService] gerarEspelhos erro:', error);
         }
       })
+    );
+  }
+
+  private buildEspelhoFormData(id: string, arquivoProjeto: File): FormData {
+    const formData = new FormData();
+    formData.append('ids[]', id);
+    formData.append('arquivoProjeto', arquivoProjeto, arquivoProjeto.name);
+    return formData;
+  }
+
+  private extractBlobErrorMessage(error: any): Observable<string> {
+    const fallback = error?.message || 'Erro ao gerar espelho.';
+    const blobError = error?.error;
+
+    if (!(blobError instanceof Blob)) {
+      return of(error?.error?.message || fallback);
+    }
+
+    return from(blobError.text()).pipe(
+      map((rawText) => {
+        if (!rawText) {
+          return fallback;
+        }
+
+        try {
+          const parsed = JSON.parse(rawText);
+          return parsed?.message || rawText;
+        } catch {
+          return rawText;
+        }
+      }),
+      catchError(() => of(fallback))
     );
   }
 

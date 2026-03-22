@@ -327,6 +327,20 @@ async function criarEspelhoPdfDoCodigo(cardData) {
   }
 }
 
+async function mesclarPdfBuffers(primaryPdfBuffer, secondaryPdfBuffer) {
+  const mergedPdf = await PDFDocument.create();
+  const primaryPdf = await PDFDocument.load(primaryPdfBuffer);
+  const secondaryPdf = await PDFDocument.load(secondaryPdfBuffer);
+
+  const primaryPages = await mergedPdf.copyPages(primaryPdf, primaryPdf.getPageIndices());
+  primaryPages.forEach((page) => mergedPdf.addPage(page));
+
+  const secondaryPages = await mergedPdf.copyPages(secondaryPdf, secondaryPdf.getPageIndices());
+  secondaryPages.forEach((page) => mergedPdf.addPage(page));
+
+  return await mergedPdf.save();
+}
+
 function formatJiraDate(rawDate) {
   if (!rawDate) return '';
 
@@ -1745,9 +1759,10 @@ async function converterDocxParaPdf(docxBuffer, baseName) {
  */
 export const gerarEspelhos = async (req, res) => {
   try {
-    const ids = Array.isArray(req.body?.ids)
-      ? req.body.ids
-      : (req.body?.cardId ? [req.body.cardId] : []);
+    const bodyIds = req.body?.ids ?? req.body?.['ids[]'];
+    const ids = Array.isArray(bodyIds)
+      ? bodyIds
+      : (bodyIds ? [bodyIds] : (req.body?.cardId ? [req.body.cardId] : []));
 
     if (ids.length === 0) {
       return res.status(400).json({
@@ -1776,6 +1791,22 @@ export const gerarEspelhos = async (req, res) => {
 
     const backendRoot = path.join(__dirname, '..');
 
+    let arquivoProjetoBuffer = null;
+    if (req.file?.buffer) {
+      const mimeType = String(req.file.mimetype || '').toLowerCase();
+      const originalName = String(req.file.originalname || '').toLowerCase();
+      const isPdf = mimeType.includes('pdf') || originalName.endsWith('.pdf');
+
+      if (!isPdf) {
+        return res.status(400).json({
+          success: false,
+          message: 'O arquivo selecionado deve ser um PDF.'
+        });
+      }
+
+      arquivoProjetoBuffer = req.file.buffer;
+    }
+
     const cardId = normalizedIds[0];
     const cardData = await buscarDadosCardEspelho(cardId);
     const numeroOrdem = sanitizeFileName(String(cardData.numeroOrdem || cardId));
@@ -1784,7 +1815,7 @@ export const gerarEspelhos = async (req, res) => {
     const baseFileName = `${numeroOrdem} ${data} ${hora}`;
     let generatedBuffer;
     let contentType = 'application/pdf';
-    let downloadName = `${baseFileName}.pdf`;
+    let downloadName = `${numeroOrdem}.pdf`;
 
     try {
       generatedBuffer = await criarEspelhoPdfDoCodigo(cardData);
@@ -1805,9 +1836,16 @@ export const gerarEspelhos = async (req, res) => {
       });
     }
 
-    // Mantem compatibilidade com upload, mas sem anexacao para preservar layout do template.
-    if (Array.isArray(req.files) && req.files.length > 0) {
-      res.setHeader('X-Attachments-Ignored', 'true');
+    if (arquivoProjetoBuffer) {
+      try {
+        generatedBuffer = Buffer.from(await mesclarPdfBuffers(generatedBuffer, arquivoProjetoBuffer));
+        downloadName = `${numeroOrdem}.pdf`;
+      } catch (mergeError) {
+        return res.status(400).json({
+          success: false,
+          message: `Nao foi possivel juntar o espelho com o arquivo selecionado: ${mergeError.message}`
+        });
+      }
     }
 
     res.setHeader('Content-Type', contentType);

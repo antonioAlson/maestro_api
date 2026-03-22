@@ -7,6 +7,35 @@
   </header>
 
   <main class="espelhos-content">
+    <input
+      #projectFileInput
+      class="hidden-file-input"
+      type="file"
+      accept="application/pdf,.pdf"
+      (change)="onProjectFileSelected($event)"
+    />
+
+    <div class="board-tabs" role="tablist" aria-label="Filtros de Aguardando Projeto">
+      <button
+        type="button"
+        class="board-tab"
+        [class.active]="activeAguardandoTab === 'aramida'"
+        [attr.aria-selected]="activeAguardandoTab === 'aramida'"
+        (click)="setAguardandoTab('aramida')"
+      >
+        Aramida
+      </button>
+      <button
+        type="button"
+        class="board-tab"
+        [class.active]="activeAguardandoTab === 'tenssylon'"
+        [attr.aria-selected]="activeAguardandoTab === 'tenssylon'"
+        (click)="setAguardandoTab('tenssylon')"
+      >
+        Tenssylon
+      </button>
+    </div>
+
     <section class="board board-top">
       <div class="board-header">
         <h2>Aguardando Projeto</h2>
@@ -14,24 +43,27 @@
       <div class="board-list-wrapper">
         <div *ngIf="isLoadingAguardandoProjeto" class="board-state">Carregando cartões...</div>
         <div *ngIf="!isLoadingAguardandoProjeto && loadErrorAguardandoProjeto" class="board-state error">{{ loadErrorAguardandoProjeto }}</div>
-        <ul class="board-list" aria-label="Lista horizontal quadro 1" *ngIf="!isLoadingAguardandoProjeto && !loadErrorAguardandoProjeto && aguardandoProjetoItems.length > 0">
+        <ul class="board-list" aria-label="Lista horizontal quadro 1" *ngIf="!isLoadingAguardandoProjeto && !loadErrorAguardandoProjeto && filteredAguardandoProjetoItems.length > 0">
           <li
             class="list-item"
-            *ngFor="let item of aguardandoProjetoItems"
+            *ngFor="let item of filteredAguardandoProjetoItems"
             [attr.data-id]="item.id"
-            [title]="getAguardandoProjetoDisplay(item).fullText"
-            [class.tensylon]="item.id?.startsWith('TENSYLON-')"
+            [title]="hasSelectedFileForCard(item.id) ? (getAguardandoProjetoDisplay(item).fullText + ' | PDF: ' + getSelectedFileNameForCard(item.id)) : getAguardandoProjetoDisplay(item).fullText"
+            [class.tensylon]="item.id.startsWith('TENSYLON-')"
             [class.marked]="isAguardandoCardMarked(item.id)"
-            (click)="onAguardandoCardClick(item)"
+            (click)="onAguardandoCardClick(item, projectFileInput)"
           >
             {{ getAguardandoProjetoDisplay(item).text }}
           </li>
         </ul>
-        <div *ngIf="!isLoadingAguardandoProjeto && !loadErrorAguardandoProjeto && aguardandoProjetoItems.length === 0" class="board-state">Nenhum card com status A Produzir.</div>
+        <div *ngIf="!isLoadingAguardandoProjeto && !loadErrorAguardandoProjeto && filteredAguardandoProjetoItems.length === 0" class="board-state">Nenhum card na aba selecionada.</div>
       </div>
     </section>
 
     <div class="between-boards-actions">
+      <button *ngIf="hasAnySelectedFile()" type="button" class="clear-btn" (click)="clearSelectedProjectFile()" [disabled]="isGeneratingEspelhos">
+        Limpar Arquivo
+      </button>
       <button type="button" class="generate-btn" (click)="gerarEspelhos()" [disabled]="!canGenerateEspelhos()">{{ isGeneratingEspelhos ? 'Gerando...' : 'Gerar Espelhos' }}</button>
     </div>
 
@@ -39,26 +71,5 @@
       {{ generateMessage }}
     </div>
 
-    <section class="board board-bottom">
-      <div class="board-header">
-        <h2>Liberados</h2>
-      </div>
-      <div class="board-list-wrapper">
-        <div *ngIf="isLoadingAguardandoProjeto" class="board-state">Carregando cartões...</div>
-        <div *ngIf="!isLoadingAguardandoProjeto && loadErrorAguardandoProjeto" class="board-state error">{{ loadErrorAguardandoProjeto }}</div>
-        <ul class="board-list" aria-label="Lista horizontal quadro 2" *ngIf="!isLoadingAguardandoProjeto && !loadErrorAguardandoProjeto && liberadosItems.length > 0">
-          <li
-            class="list-item"
-            *ngFor="let item of liberadosItems"
-            [attr.data-id]="item.id"
-            [title]="getAguardandoProjetoDisplay(item).fullText"
-            [class.tensylon]="item.id?.startsWith('TENSYLON-')"
-          >
-            {{ getAguardandoProjetoDisplay(item).text }}
-          </li>
-        </ul>
-        <div *ngIf="!isLoadingAguardandoProjeto && !loadErrorAguardandoProjeto && liberadosItems.length === 0" class="board-state">Nenhum card com status Liberado Engenharia.</div>
-      </div>
-    </section>
   </main>
 </div>
