@@ -532,5 +532,21 @@ export class JiraService {
     return fallbackName;
   }
 
+  /**
+   * Obtém o histórico de logs de geração de espelhos
+   */
+  obterLogsEspelhos(): Observable<{ success: boolean; data: { logs: string } }> {
+    console.log('📜 [JiraService] Buscando logs de espelhos');
+    return this.http.get<{ success: boolean; data: { logs: string } }>(`${this.apiUrl}/jira/logs-espelhos`).pipe(
+      tap({
+        next: (response) => {
+          console.log('✅ [JiraService] Logs obtidos com sucesso');
+        },
+        error: (error) => {
+          console.error('❌ [JiraService] Erro ao obter logs:', error);
+        }
+      })
+    );
+  }
 
 }

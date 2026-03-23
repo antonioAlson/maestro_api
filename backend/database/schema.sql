@@ -4,9 +4,14 @@ CREATE TABLE IF NOT EXISTS maestro.users (
   name VARCHAR(255) NOT NULL,
   email VARCHAR(255) UNIQUE NOT NULL,
   password VARCHAR(255) NOT NULL,
+  menu_access JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Compatibilidade para bases já existentes
+ALTER TABLE maestro.users
+ADD COLUMN IF NOT EXISTS menu_access JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 -- Índice para busca por email
 CREATE INDEX IF NOT EXISTS idx_users_email ON maestro.users(email);

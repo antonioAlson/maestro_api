@@ -32,4 +32,17 @@ pool.on('error', (err) => {
 // Função para executar queries
 export const query = (text, params) => pool.query(text, params);
 
+// Garante colunas esperadas para versões antigas do banco.
+export async function ensureDatabaseCompatibility() {
+  await pool.query(`
+    ALTER TABLE IF EXISTS maestro.users
+    ADD COLUMN IF NOT EXISTS menu_access JSONB NOT NULL DEFAULT '[]'::jsonb;
+  `);
+
+  await pool.query(`
+    ALTER TABLE IF EXISTS maestro.users
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+  `);
+}
+
 export default pool;

@@ -2,6 +2,41 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { query } from '../config/database.js';
 
+const DEFAULT_MENU_ACCESS = [
+  '/home',
+  '/pcp/ordens',
+  '/pcp/acompanhamento',
+  '/pcp/relatorios',
+  '/projetos/espelhos',
+  '/users',
+  '/users/acesso',
+  '/reports',
+  '/settings'
+];
+
+const VALID_MENU_ACCESS = new Set(DEFAULT_MENU_ACCESS);
+
+const sanitizeMenuAccess = (menuAccess) => {
+  if (!Array.isArray(menuAccess)) {
+    return [];
+  }
+
+  const validUnique = Array.from(
+    new Set(menuAccess.filter(item => typeof item === 'string' && VALID_MENU_ACCESS.has(item)))
+  );
+
+  return validUnique;
+};
+
+const mapUser = (user) => ({
+  id: user.id,
+  name: user.name,
+  email: user.email,
+  menuAccess: Array.isArray(user.menu_access) ? user.menu_access : [],
+  createdAt: user.created_at,
+  updatedAt: user.updated_at
+});
+
 // Registrar novo usuário
 export const register = async (req, res) => {
   try {
@@ -51,8 +86,8 @@ export const register = async (req, res) => {
 
     // Inserir usuário no banco
     const result = await query(
-      'INSERT INTO maestro.users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email, created_at',
-      [name, email, hashedPassword]
+      'INSERT INTO maestro.users (name, email, password, menu_access) VALUES ($1, $2, $3, $4::jsonb) RETURNING id, name, email, menu_access, created_at',
+      [name, email, hashedPassword, JSON.stringify(DEFAULT_MENU_ACCESS)]
     );
 
     const user = result.rows[0];
@@ -68,12 +103,7 @@ export const register = async (req, res) => {
       success: true,
       message: 'Usuário cadastrado com sucesso',
       data: {
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          createdAt: user.created_at
-        },
+        user: mapUser(user),
         token
       }
     });
@@ -105,7 +135,7 @@ export const login = async (req, res) => {
     // Buscar usuário no banco
     console.log('🔍 Buscando usuário no banco...');
     const result = await query(
-      'SELECT id, name, email, password FROM maestro.users WHERE email = $1',
+      'SELECT id, name, email, password, menu_access FROM maestro.users WHERE email = $1',
       [email]
     );
     
@@ -149,11 +179,7 @@ export const login = async (req, res) => {
       success: true,
       message: 'Login realizado com sucesso',
       data: {
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email
-        },
+        user: mapUser(user),
         token
       }
     });
@@ -173,7 +199,7 @@ export const getMe = async (req, res) => {
     const userId = req.user.id;
 
     const result = await query(
-      'SELECT id, name, email, created_at, updated_at FROM maestro.users WHERE id = $1',
+      'SELECT id, name, email, menu_access, created_at, updated_at FROM maestro.users WHERE id = $1',
       [userId]
     );
 
@@ -189,13 +215,7 @@ export const getMe = async (req, res) => {
     res.json({
       success: true,
       data: {
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          createdAt: user.created_at,
-          updatedAt: user.updated_at
-        }
+        user: mapUser(user)
       }
     });
   } catch (error) {
@@ -211,15 +231,10 @@ export const getMe = async (req, res) => {
 export const listUsers = async (_req, res) => {
   try {
     const result = await query(
-      'SELECT id, name, email, created_at FROM maestro.users ORDER BY created_at DESC'
+      'SELECT id, name, email, menu_access, created_at, updated_at FROM maestro.users ORDER BY created_at DESC'
     );
 
-    const users = result.rows.map((user) => ({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      createdAt: user.created_at
-    }));
+    const users = result.rows.map(mapUser);
 
     res.json({
       success: true,
@@ -277,8 +292,8 @@ export const createUser = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     const result = await query(
-      'INSERT INTO maestro.users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email, created_at',
-      [name, email, hashedPassword]
+      'INSERT INTO maestro.users (name, email, password, menu_access) VALUES ($1, $2, $3, $4::jsonb) RETURNING id, name, email, menu_access, created_at, updated_at',
+      [name, email, hashedPassword, JSON.stringify(DEFAULT_MENU_ACCESS)]
     );
 
     const user = result.rows[0];
@@ -287,12 +302,7 @@ export const createUser = async (req, res) => {
       success: true,
       message: 'Usuário cadastrado com sucesso',
       data: {
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          createdAt: user.created_at
-        }
+        user: mapUser(user)
       }
     });
   } catch (error) {
@@ -300,6 +310,47 @@ export const createUser = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro ao cadastrar usuário'
+    });
+  }
+};
+
+// Atualizar itens de menu acessíveis por usuário
+export const updateUserAccess = async (req, res) => {
+  try {
+    const userId = Number(req.params.id);
+    const sanitizedAccess = sanitizeMenuAccess(req.body?.menuAccess);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID de usuário inválido'
+      });
+    }
+
+    const result = await query(
+      'UPDATE maestro.users SET menu_access = $1::jsonb, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING id, name, email, menu_access, created_at, updated_at',
+      [JSON.stringify(sanitizedAccess), userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Usuário não encontrado'
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Acessos atualizados com sucesso',
+      data: {
+        user: mapUser(result.rows[0])
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar acessos do usuário:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao atualizar acessos do usuário'
     });
   }
 };

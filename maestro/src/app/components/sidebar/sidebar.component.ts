@@ -24,6 +24,7 @@ export class SidebarComponent {
   isCollapsed = true;
   currentUser$;
   expandedMenu: string | null = null;
+  visibleMenuItems: MenuItem[] = [];
 
   menuItems: MenuItem[] = [
     {
@@ -76,6 +77,11 @@ export class SidebarComponent {
           icon: 'M8 7a4 4 0 118 0 4 4 0 01-8 0zm-2 10a6 6 0 0112 0v1H6v-1z',
           label: 'Gerenciar',
           route: '/users'
+        },
+        {
+          icon: 'M12 11c1.657 0 3-1.343 3-3V7a3 3 0 10-6 0v1c0 1.657 1.343 3 3 3zm-6 9v-3a6 6 0 1112 0v3H6z',
+          label: 'Acesso',
+          route: '/users/acesso'
         }
       ]
     },
@@ -97,6 +103,42 @@ export class SidebarComponent {
     private elementRef: ElementRef
   ) {
     this.currentUser$ = this.authService.currentUser$;
+    this.visibleMenuItems = this.menuItems;
+
+    this.currentUser$.subscribe((user) => {
+      const allowedRoutes = new Set(user?.menuAccess || []);
+
+      if (!user || allowedRoutes.size === 0) {
+        this.visibleMenuItems = this.menuItems;
+        return;
+      }
+
+      this.visibleMenuItems = this.menuItems
+        .map((item) => {
+          if (item.children && item.children.length > 0) {
+            const filteredChildren = item.children.filter(child => !child.route || allowedRoutes.has(child.route));
+            if (filteredChildren.length === 0) {
+              return null;
+            }
+
+            return {
+              ...item,
+              children: filteredChildren
+            };
+          }
+
+          if (!item.route || allowedRoutes.has(item.route)) {
+            return item;
+          }
+
+          return null;
+        })
+        .filter((item): item is MenuItem => item !== null);
+
+      if (this.expandedMenu && !this.visibleMenuItems.some(item => item.label === this.expandedMenu)) {
+        this.expandedMenu = null;
+      }
+    });
   }
 
   @HostListener('document:click', ['$event'])

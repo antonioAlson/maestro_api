@@ -30,6 +30,9 @@ export class ProjetosEspelhosComponent implements OnInit {
   isGeneratingEspelhos = false;
   generateMessage = '';
   generateMessageType: 'success' | 'error' | '' = '';
+  showLogsModal = false;
+  logsContent = '';
+  isLoadingLogs = false;
 
   private markedCardIds = new Set<string>();
   private pendingCardIdForFileSelection: string | null = null;
@@ -411,5 +414,40 @@ export class ProjetosEspelhosComponent implements OnInit {
     } catch {
       // Ignora se chamado fora de ciclo de renderização.
     }
+  }
+
+  abrirLogsModal(): void {
+    this.showLogsModal = true;
+    this.isLoadingLogs = true;
+    this.logsContent = '';
+    this.refreshView();
+
+    this.jiraService.obterLogsEspelhos()
+      .pipe(
+        take(1),
+        finalize(() => {
+          this.isLoadingLogs = false;
+          this.refreshView();
+        })
+      )
+      .subscribe({
+        next: (response) => {
+          if (response?.success) {
+            this.logsContent = response.data?.logs || 'Nenhum log encontrado.';
+          } else {
+            this.logsContent = 'Erro ao carregar logs.';
+          }
+          this.refreshView();
+        },
+        error: () => {
+          this.logsContent = 'Erro ao carregar logs.';
+          this.refreshView();
+        }
+      });
+  }
+
+  fecharLogsModal(): void {
+    this.showLogsModal = false;
+    this.refreshView();
   }
 }

@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth.js';
 import jiraRoutes from './routes/jira.js';
+import { ensureDatabaseCompatibility } from './config/database.js';
 
 // Carregar variáveis de ambiente
 dotenv.config();
@@ -80,7 +81,17 @@ function startServer(initialPort) {
   });
 }
 
-startServer(PORT);
+async function bootstrap() {
+  try {
+    await ensureDatabaseCompatibility();
+    startServer(PORT);
+  } catch (error) {
+    console.error('❌ Erro ao validar estrutura do banco:', error);
+    process.exit(1);
+  }
+}
+
+bootstrap();
 
 // Tratamento de erros não capturados
 process.on('unhandledRejection', (err) => {

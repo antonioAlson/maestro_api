@@ -49,13 +49,24 @@
               <th>Nome</th>
               <th>Email</th>
               <th>Cadastrado em</th>
+              <th>Acessos vinculados</th>
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let user of filteredUsers">
+            <tr
+              *ngFor="let user of filteredUsers"
+              class="clickable-row"
+              (click)="openAccessModal(user)"
+              (keydown.enter)="openAccessModal(user)"
+              (keydown.space)="openAccessModal(user); $event.preventDefault()"
+              tabindex="0"
+              role="button"
+              [attr.aria-label]="'Configurar acesso de ' + user.name"
+            >
               <td>{{ user.name }}</td>
               <td>{{ user.email }}</td>
               <td>{{ formatDate(user.createdAt) }}</td>
+              <td>{{ (user.menuAccess?.length || 0) }} item(ns)</td>
             </tr>
           </tbody>
         </table>
@@ -66,6 +77,56 @@
       </ng-template>
     </section>
   </main>
+</div>
+
+<div class="modal-overlay" *ngIf="showAccessModal" (click)="closeAccessModal()">
+  <div class="modal-card access-modal" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Configurar Acesso</h3>
+      <button type="button" class="icon-btn" (click)="closeAccessModal()" [disabled]="isSavingAccess" aria-label="Fechar">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+
+    <p class="access-user" *ngIf="selectedAccessUser">
+      Usuario: <strong>{{ selectedAccessUser.name }}</strong>
+    </p>
+
+    <div class="access-shortcuts">
+      <button type="button" class="btn-ghost btn-small" (click)="grantAllAccess()" [disabled]="isSavingAccess">Marcar todos</button>
+      <button type="button" class="btn-ghost btn-small" (click)="clearAllAccess()" [disabled]="isSavingAccess">Limpar todos</button>
+    </div>
+
+    <div class="access-list">
+      <label class="access-item" *ngFor="let option of menuAccessOptions">
+        <input
+          type="checkbox"
+          [checked]="hasRouteAccess(option.route)"
+          (change)="toggleRouteAccess(option.route, $event)"
+          [disabled]="isSavingAccess"
+        />
+        <span>{{ option.label }}</span>
+      </label>
+    </div>
+
+    <div *ngIf="feedbackMessage" class="feedback" [class.success]="feedbackType === 'success'" [class.error]="feedbackType === 'error'">
+      {{ feedbackMessage }}
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" (click)="closeAccessModal()" [disabled]="isSavingAccess">Cancelar</button>
+      <button type="button" class="btn-primary" (click)="saveAccess()" [disabled]="isSavingAccess">
+        <svg *ngIf="isSavingAccess" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spinner">
+          <circle cx="12" cy="12" r="10" opacity="0.25"></circle>
+          <path d="M12 2a10 10 0 0110 10" opacity="0.75"></path>
+        </svg>
+        {{ isSavingAccess ? 'Salvando e aplicando...' : 'Salvar e aplicar acessos' }}
+      </button>
+    </div>
+  </div>
 </div>
 
 <div class="modal-overlay" *ngIf="showCreateModal" (click)="closeCreateModal()">

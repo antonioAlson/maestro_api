@@ -10,6 +10,7 @@ import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { registrarGeracaoEspelhos } from '../utils/espelhos-logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1790,6 +1791,10 @@ async function converterDocxParaPdf(docxBuffer, baseName) {
  * Gera espelhos nativamente no backend Node.js para múltiplos cards.
  */
 export const gerarEspelhos = async (req, res) => {
+  const startTime = Date.now();
+  const usuarioEmail = req.user?.email || 'Desconhecido';
+  const usuarioNome = req.user?.name || usuarioEmail;
+  
   try {
     const bodyIds = req.body?.ids ?? req.body?.['ids[]'];
     const ids = Array.isArray(bodyIds)
@@ -1797,6 +1802,15 @@ export const gerarEspelhos = async (req, res) => {
       : (bodyIds ? [bodyIds] : (req.body?.cardId ? [req.body.cardId] : []));
 
     if (ids.length === 0) {
+      registrarGeracaoEspelhos({
+        usuario: usuarioNome,
+        cards: [],
+        sucesso: false,
+        quantidadeGerada: 0,
+        erro: 'Nenhum card ID fornecido',
+        incluiuPdf: false
+      });
+      
       return res.status(400).json({
         success: false,
         message: 'Informe o cardId para gerar espelho.'
@@ -1808,6 +1822,15 @@ export const gerarEspelhos = async (req, res) => {
       .filter((id) => id.length > 0);
 
     if (normalizedIds.length === 0) {
+      registrarGeracaoEspelhos({
+        usuario: usuarioNome,
+        cards: ids,
+        sucesso: false,
+        quantidadeGerada: 0,
+        erro: 'IDs inválidos fornecidos',
+        incluiuPdf: false
+      });
+      
       return res.status(400).json({
         success: false,
         message: 'IDs inválidos para gerar espelhos.'
@@ -1815,6 +1838,15 @@ export const gerarEspelhos = async (req, res) => {
     }
 
     if (normalizedIds.length !== 1) {
+      registrarGeracaoEspelhos({
+        usuario: usuarioNome,
+        cards: normalizedIds,
+        sucesso: false,
+        quantidadeGerada: 0,
+        erro: `Múltiplos IDs enviados (${normalizedIds.length}). Apenas 1 ID permitido por requisição`,
+        incluiuPdf: false
+      });
+      
       return res.status(400).json({
         success: false,
         message: 'Envie apenas 1 ID por requisição para download direto.'
@@ -1822,12 +1854,23 @@ export const gerarEspelhos = async (req, res) => {
     }
 
     let arquivoProjetoBuffer = null;
+    const incluiuPdf = !!req.file?.buffer;
+    
     if (req.file?.buffer) {
       const mimeType = String(req.file.mimetype || '').toLowerCase();
       const originalName = String(req.file.originalname || '').toLowerCase();
       const isPdf = mimeType.includes('pdf') || originalName.endsWith('.pdf');
 
       if (!isPdf) {
+        registrarGeracaoEspelhos({
+          usuario: usuarioNome,
+          cards: normalizedIds,
+          sucesso: false,
+          quantidadeGerada: 0,
+          erro: `Arquivo enviado não é PDF: ${originalName}`,
+          incluiuPdf: false
+        });
+        
         return res.status(400).json({
           success: false,
           message: 'O arquivo selecionado deve ser um PDF.'
@@ -1848,6 +1891,20 @@ export const gerarEspelhos = async (req, res) => {
       generatedBuffer = await criarEspelhoPdfDoCodigo(cardData);
     } catch (pdfError) {
       console.error('❌ Erro ao gerar PDF:', pdfError.message);
+      
+      registrarGeracaoEspelhos({
+        usuario: usuarioNome,
+        cards: normalizedIds,
+        sucesso: false,
+        quantidadeGerada: 0,
+        erro: `Erro ao gerar PDF: ${pdfError.message}`,
+        incluiuPdf,
+        detalhes: {
+          'Número Ordem': numeroOrdem,
+          'Card ID': cardId
+        }
+      });
+      
       return res.status(500).json({
         success: false,
         message: `Erro ao gerar PDF: ${pdfError.message}`
@@ -1859,6 +1916,20 @@ export const gerarEspelhos = async (req, res) => {
         generatedBuffer = Buffer.from(await mesclarPdfBuffers(generatedBuffer, arquivoProjetoBuffer));
         downloadName = `${numeroOrdem}.pdf`;
       } catch (mergeError) {
+        registrarGeracaoEspelhos({
+          usuario: usuarioNome,
+          cards: normalizedIds,
+          sucesso: false,
+          quantidadeGerada: 0,
+          erro: `Erro ao mesclar PDFs: ${mergeError.message}`,
+          incluiuPdf: true,
+          detalhes: {
+            'Número Ordem': numeroOrdem,
+            'Card ID': cardId,
+            'Nome Arquivo': req.file?.originalname
+          }
+        });
+        
         return res.status(400).json({
           success: false,
           message: `Nao foi possivel juntar o espelho com o arquivo selecionado: ${mergeError.message}`
@@ -1869,20 +1940,90 @@ export const gerarEspelhos = async (req, res) => {
     try {
       await anexarPdfNoCardJira(cardId, generatedBuffer, downloadName);
     } catch (attachError) {
+      registrarGeracaoEspelhos({
+        usuario: usuarioNome,
+        cards: normalizedIds,
+        sucesso: false,
+        quantidadeGerada: 1,
+        erro: `PDF gerado, mas falha ao anexar no Jira: ${attachError.message}`,
+        incluiuPdf,
+        detalhes: {
+          'Número Ordem': numeroOrdem,
+          'Card ID': cardId,
+          'Nome Arquivo': downloadName,
+          'Tamanho PDF': `${(generatedBuffer.length / 1024).toFixed(2)} KB`
+        }
+      });
+      
       return res.status(500).json({
         success: false,
         message: `PDF gerado, mas não foi possível anexar no card ${cardId}: ${attachError.message}`
       });
     }
 
+    // Sucesso total
+    const tempoDecorrido = ((Date.now() - startTime) / 1000).toFixed(2);
+    
+    registrarGeracaoEspelhos({
+      usuario: usuarioNome,
+      cards: normalizedIds,
+      sucesso: true,
+      quantidadeGerada: 1,
+      incluiuPdf,
+      detalhes: {
+        'Número Ordem': numeroOrdem,
+        'Card ID': cardId,
+        'Nome Arquivo': downloadName,
+        'Tamanho PDF': `${(generatedBuffer.length / 1024).toFixed(2)} KB`,
+        'Tempo de Processamento': `${tempoDecorrido}s`,
+        'Arquivo Projeto': incluiuPdf ? req.file?.originalname : 'Não incluído'
+      }
+    });
+
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
     return res.status(200).send(generatedBuffer);
   } catch (error) {
     console.error('❌ Erro em gerarEspelhos:', error);
+    
+    registrarGeracaoEspelhos({
+      usuario: usuarioNome,
+      cards: [],
+      sucesso: false,
+      quantidadeGerada: 0,
+      erro: `Erro não tratado: ${error.message}`,
+      incluiuPdf: !!req.file?.buffer,
+      detalhes: {
+        'Stack': error.stack?.split('\n').slice(0, 3).join(' | ')
+      }
+    });
+    
     return res.status(500).json({
       success: false,
       message: `Erro ao gerar espelhos: ${error.message}`
+    });
+  }
+};
+
+/**
+ * Obtém o histórico de logs de geração de espelhos
+ */
+export const obterLogsEspelhos = async (req, res) => {
+  try {
+    const { obterLogsEspelhos: obterLogs } = await import('../utils/espelhos-logger.js');
+    const logsContent = obterLogs();
+    
+    return res.status(200).json({
+      success: true,
+      data: {
+        logs: logsContent
+      }
+    });
+  } catch (error) {
+    console.error('❌ Erro ao obter logs de espelhos:', error);
+    return res.status(500).json({
+      success: false,
+      message: `Erro ao obter logs: ${error.message}`
     });
   }
 };

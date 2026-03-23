@@ -7,7 +7,9 @@ interface User {
   id: number;
   name: string;
   email: string;
+  menuAccess?: string[];
   createdAt?: string;
+  updatedAt?: string;
 }
 
 interface AuthResponse {
@@ -28,6 +30,14 @@ interface UsersListResponse {
 }
 
 interface CreateUserResponse {
+  success: boolean;
+  message: string;
+  data: {
+    user: User;
+  };
+}
+
+interface UpdateUserAccessResponse {
   success: boolean;
   message: string;
   data: {
@@ -116,6 +126,26 @@ export class AuthService {
     });
   }
 
+  updateUserAccess(userId: number, menuAccess: string[]): Observable<UpdateUserAccessResponse> {
+    return this.http.put<UpdateUserAccessResponse>(`${this.apiUrl}/users/${userId}/access`, {
+      menuAccess
+    }).pipe(
+      tap((response) => {
+        if (!response.success) {
+          return;
+        }
+
+        const currentUser = this.currentUserSubject.value;
+        if (currentUser && currentUser.id === response.data.user.id) {
+          this.currentUserSubject.next({
+            ...currentUser,
+            menuAccess: response.data.user.menuAccess || []
+          });
+        }
+      })
+    );
+  }
+
   /**
    * Fazer logout
    */
@@ -173,6 +203,13 @@ export class AuthService {
         }
       }
     });
+  }
+
+  /**
+   * Recarregar dados do usuário atual (usado quando permissões são alteradas)
+   */
+  reloadCurrentUser(): void {
+    this.loadCurrentUser();
   }
 
   private initializeTabSessionTracking(): void {

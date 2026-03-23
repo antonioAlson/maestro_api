@@ -16,7 +16,35 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 1rem;
   min-height: 46px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.btn-logs {
+  height: 2.5rem;
+  border-radius: 0.7rem;
+  border: 1px solid #d1d5db;
+  padding: 0 1rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #ffffff;
+  color: #374151;
+
+  &:hover {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+  }
 }
 
 .header-content h1 {
@@ -278,5 +306,127 @@
   .generate-btn {
     min-height: 2.15rem;
     font-size: 0.82rem;
+  }
+}
+// Estilos do modal de logs
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  z-index: 1200;
+}
+
+.modal-logs {
+  width: min(900px, 96vw);
+  max-height: 90vh;
+  background: #ffffff;
+  border-radius: 1rem;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 24px 50px rgba(15, 23, 42, 0.25);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+
+  h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: #111827;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+
+    svg {
+      color: #6b7280;
+    }
+  }
+}
+
+.icon-btn {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.55rem;
+  background: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: #f3f4f6;
+  }
+}
+
+.logs-content {
+  flex: 1;
+  overflow: auto;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  max-height: calc(90vh - 200px);
+
+  pre {
+    margin: 0;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: #1f2937;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+}
+
+.empty-logs {
+  margin: 0;
+  text-align: center;
+  color: #6b7280;
+  padding: 2rem 1rem;
+  font-size: 0.9rem;
+}
+
+.logs-loading {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 3rem 1rem;
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.btn-secondary {
+  height: 2.5rem;
+  border-radius: 0.7rem;
+  border: 1px solid #d1d5db;
+  padding: 0 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #f8fafc;
+  color: #334155;
+
+  &:hover {
+    background: #f1f5f9;
   }
 }

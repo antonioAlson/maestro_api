@@ -3,12 +3,19 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { finalize, take } from 'rxjs/operators';
 import { AuthService } from '../../services/auth.service';
+import { Router } from '@angular/router';
 
 interface ManagedUser {
   id: number;
   name: string;
   email: string;
+  menuAccess?: string[];
   createdAt?: string;
+}
+
+interface MenuAccessOption {
+  route: string;
+  label: string;
 }
 
 @Component({
@@ -33,13 +40,35 @@ export class UsersManageComponent implements OnInit {
   formPassword = '';
   formConfirmPassword = '';
 
+  readonly menuAccessOptions: MenuAccessOption[] = [
+    { route: '/home', label: 'Inicio' },
+    { route: '/pcp/ordens', label: 'PCP - Ordens' },
+    { route: '/pcp/acompanhamento', label: 'PCP - Acompanhamento' },
+    { route: '/pcp/relatorios', label: 'PCP - Relatorios PCP' },
+    { route: '/projetos/espelhos', label: 'Projetos - Espelhos' },
+    { route: '/users', label: 'Usuarios - Gerenciar' },
+    { route: '/users/acesso', label: 'Usuarios - Acesso' },
+    { route: '/reports', label: 'Relatorios' },
+    { route: '/settings', label: 'Configuracoes' }
+  ];
+
+  showAccessModal = false;
+  isSavingAccess = false;
+  selectedAccessUser: ManagedUser | null = null;
+  selectedAccessRoutes = new Set<string>();
+
   constructor(
     private authService: AuthService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private router: Router
   ) {}
 
   ngOnInit(): void {
     this.loadUsers();
+
+    if (this.router.url === '/users/acesso') {
+      this.searchTerm = '';
+    }
   }
 
   loadUsers(): void {
@@ -96,6 +125,98 @@ export class UsersManageComponent implements OnInit {
     this.feedbackMessage = '';
     this.feedbackType = '';
     this.refreshView();
+  }
+
+  openAccessModal(user: ManagedUser): void {
+    this.selectedAccessUser = user;
+    this.selectedAccessRoutes = new Set(user.menuAccess || []);
+    this.showAccessModal = true;
+    this.feedbackMessage = '';
+    this.feedbackType = '';
+    this.refreshView();
+  }
+
+  closeAccessModal(): void {
+    if (this.isSavingAccess) {
+      return;
+    }
+
+    this.showAccessModal = false;
+    this.selectedAccessUser = null;
+    this.selectedAccessRoutes.clear();
+    this.refreshView();
+  }
+
+  hasRouteAccess(route: string): boolean {
+    return this.selectedAccessRoutes.has(route);
+  }
+
+  toggleRouteAccess(route: string, event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    if (checked) {
+      this.selectedAccessRoutes.add(route);
+    } else {
+      this.selectedAccessRoutes.delete(route);
+    }
+  }
+
+  grantAllAccess(): void {
+    this.selectedAccessRoutes = new Set(this.menuAccessOptions.map(option => option.route));
+  }
+
+  clearAllAccess(): void {
+    this.selectedAccessRoutes.clear();
+  }
+
+  saveAccess(): void {
+    if (!this.selectedAccessUser || this.isSavingAccess) {
+      return;
+    }
+
+    this.isSavingAccess = true;
+    this.feedbackMessage = '';
+    this.feedbackType = '';
+    this.refreshView();
+
+    this.authService.updateUserAccess(
+      this.selectedAccessUser.id,
+      Array.from(this.selectedAccessRoutes)
+    ).pipe(
+      take(1),
+      finalize(() => {
+        this.isSavingAccess = false;
+        this.refreshView();
+      })
+    ).subscribe({
+      next: (response) => {
+        const updatedUser = response.data?.user as ManagedUser | undefined;
+        if (updatedUser) {
+          this.users = this.users.map(user => user.id === updatedUser.id ? updatedUser : user);
+          this.applySearch();
+          this.selectedAccessUser = updatedUser;
+          this.selectedAccessRoutes = new Set(updatedUser.menuAccess || []);
+
+          // Se alterou permissões do próprio usuário logado, atualiza imediatamente
+          const currentUser = this.authService.getCurrentUser();
+          if (currentUser && currentUser.id === updatedUser.id) {
+            this.authService.reloadCurrentUser();
+          }
+        }
+
+        this.feedbackType = 'success';
+        this.feedbackMessage = response.message || 'Acessos atualizados com sucesso';
+        this.refreshView();
+
+        setTimeout(() => {
+          this.closeAccessModal();
+        }, 700);
+      },
+      error: (error) => {
+        this.feedbackType = 'error';
+        this.feedbackMessage = error?.error?.message || 'Erro ao salvar acessos';
+        this.refreshView();
+      }
+    });
   }
 
   closeCreateModal(): void {

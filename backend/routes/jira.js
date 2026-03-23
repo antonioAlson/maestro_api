@@ -8,7 +8,8 @@ import {
   buscarArquivosPorIds,
   downloadArquivo,
   downloadArquivoJira,
-  gerarEspelhos
+  gerarEspelhos,
+  obterLogsEspelhos
 } from '../controllers/jiraController.js';
 import { authenticate } from '../middleware/auth.js';
 
@@ -43,5 +44,8 @@ router.get('/download-arquivo-jira/:cardId/:attachmentId/:filename', authenticat
 
 // Gerar espelho
 router.post('/gerar-espelhos', authenticate, upload.single('arquivoProjeto'), gerarEspelhos);
+
+// Obter logs de geração de espelhos
+router.get('/logs-espelhos', authenticate, obterLogsEspelhos);
 
 export default router;

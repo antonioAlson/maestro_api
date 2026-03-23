@@ -21,7 +21,7 @@
   <!-- Menu de Navegação -->
   <nav class="sidebar-nav">
     <ul class="menu-list">
-      <li *ngFor="let item of menuItems" class="menu-item">
+      <li *ngFor="let item of visibleMenuItems" class="menu-item">
         <!-- Menu com subcategorias -->
         <div *ngIf="item.children && item.children.length > 0" class="menu-item-container">
           <div
