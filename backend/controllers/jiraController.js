@@ -1569,6 +1569,70 @@ async function anexarPdfNoCardJira(cardId, pdfBuffer, fileName) {
 }
 
 /**
+ * Transiciona o status de um card no Jira para "Liberado Engenharia"
+ */
+async function transicionarStatusCard(cardId, statusNome = 'Liberado Engenharia') {
+  const jiraUrl = process.env.JIRA_URL;
+  const email = process.env.JIRA_EMAIL;
+  const apiToken = process.env.JIRA_API_TOKEN;
+
+  if (!jiraUrl || !email || !apiToken) {
+    throw new Error('Credenciais do Jira não configuradas no servidor');
+  }
+
+  const auth = Buffer.from(`${email}:${apiToken}`).toString('base64');
+
+  try {
+    // 1. Buscar transições disponíveis para o card
+    const transitionsUrl = `${jiraUrl}/rest/api/3/issue/${encodeURIComponent(cardId)}/transitions`;
+    const transitionsResponse = await axios.get(transitionsUrl, {
+      headers: {
+        Authorization: `Basic ${auth}`,
+        Accept: 'application/json'
+      }
+    });
+
+    const transitions = transitionsResponse.data.transitions || [];
+    console.log(`🔍 Transições disponíveis para ${cardId}:`, transitions.map(t => t.name).join(', '));
+
+    // 2. Encontrar a transição para "Liberado Engenharia"
+    const targetTransition = transitions.find(
+      t => t.name.toLowerCase().includes('liberado') && t.name.toLowerCase().includes('engenharia')
+    );
+
+    if (!targetTransition) {
+      console.warn(`⚠️ Transição "${statusNome}" não encontrada para o card ${cardId}`);
+      throw new Error(`Transição "${statusNome}" não disponível para este card`);
+    }
+
+    console.log(`✅ Transição encontrada: ${targetTransition.name} (ID: ${targetTransition.id})`);
+
+    // 3. Executar a transição
+    await axios.post(
+      transitionsUrl,
+      {
+        transition: {
+          id: targetTransition.id
+        }
+      },
+      {
+        headers: {
+          Authorization: `Basic ${auth}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json'
+        }
+      }
+    );
+
+    console.log(`✅ Status do card ${cardId} alterado para "${targetTransition.name}"`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Erro ao transicionar status do card ${cardId}:`, error.message);
+    throw error;
+  }
+}
+
+/**
  * Gera documento DOCX de espelho com base no template original.
  */
 async function gerarEspelhoDocx(templatePath, cardData) {
@@ -1961,6 +2025,15 @@ export const gerarEspelhos = async (req, res) => {
         success: false,
         message: `PDF gerado, mas não foi possível anexar no card ${cardId}: ${attachError.message}`
       });
+    }
+
+    // Transicionar status do card para "Liberado Engenharia"
+    try {
+      await transicionarStatusCard(cardId);
+      console.log(`✅ Status do card ${cardId} alterado para "Liberado Engenharia"`);
+    } catch (statusError) {
+      console.warn(`⚠️ Não foi possível alterar o status do card ${cardId}:`, statusError.message);
+      // Não falha a requisição, apenas loga o aviso
     }
 
     // Sucesso total
