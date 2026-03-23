@@ -62,6 +62,9 @@ export class OrdensProducaoComponent implements OnInit {
   showReprogramModal = false;
   showPrintModal = false;
   showAlterarDatasModal = false;
+  showReprogramPopup = false;
+  reprogramPopupType: 'success' | 'error' | '' = '';
+  reprogramPopupMessage = '';
   idsInput = '';
   dateInput = '';
   isProcessing = false;
@@ -107,7 +110,10 @@ export class OrdensProducaoComponent implements OnInit {
   handleKeyboardEvent(event: KeyboardEvent): void {
     // ESC fecha qualquer modal aberto
     if (event.key === 'Escape') {
-      if (this.showReprogramModal) {
+      if (this.showReprogramPopup) {
+        this.closeReprogramPopup();
+        event.preventDefault();
+      } else if (this.showReprogramModal) {
         this.closeReprogramModal();
         event.preventDefault();
       } else if (this.showPrintModal) {
@@ -382,6 +388,9 @@ export class OrdensProducaoComponent implements OnInit {
 
   openReprogramModal(): void {
     this.showReprogramModal = true;
+    this.showReprogramPopup = false;
+    this.reprogramPopupType = '';
+    this.reprogramPopupMessage = '';
     this.idsInput = '';
     this.dateInput = '';
     this.resultMessage = '';
@@ -394,6 +403,12 @@ export class OrdensProducaoComponent implements OnInit {
     this.showReprogramModal = false;
     this.isProcessing = false;
     this.clearProcessingGuard();
+  }
+
+  closeReprogramPopup(): void {
+    this.showReprogramPopup = false;
+    this.reprogramPopupType = '';
+    this.reprogramPopupMessage = '';
   }
 
   openPrintModal(): void {
@@ -992,6 +1007,13 @@ export class OrdensProducaoComponent implements OnInit {
     }, this.feedbackDelayMs);
   }
 
+  private showReprogramResultPopup(type: 'success' | 'error', message: string): void {
+    this.reprogramPopupType = type;
+    this.reprogramPopupMessage = message;
+    this.showReprogramPopup = true;
+    this.refreshView();
+  }
+
   /**
    * Atualiza contador de IDs detectados
    */
@@ -1219,6 +1241,7 @@ export class OrdensProducaoComponent implements OnInit {
             this.resultMessage = response?.message || 'Erro ao reprogramar';
           }
 
+          this.showReprogramResultPopup(this.resultType || 'error', this.resultMessage);
           this.refreshView();
           this.scheduleResetAfterFeedback(true);
         },
@@ -1238,6 +1261,7 @@ export class OrdensProducaoComponent implements OnInit {
             this.resultMessage = error.error?.message || error?.message || 'Erro ao conectar com o servidor';
           }
 
+          this.showReprogramResultPopup('error', this.resultMessage);
           this.refreshView();
           this.scheduleResetAfterFeedback(false);
         }

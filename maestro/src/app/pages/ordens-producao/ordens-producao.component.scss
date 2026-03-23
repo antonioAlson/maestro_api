@@ -571,6 +571,38 @@
   }
 }
 
+.result-popup-overlay {
+  z-index: 1200;
+}
+
+.result-popup-content {
+  max-width: 560px;
+
+  &.success {
+    .header-icon {
+      color: #10b981;
+    }
+  }
+
+  &.error {
+    .header-icon {
+      color: #ef4444;
+    }
+  }
+}
+
+.result-popup-message {
+  margin: 0;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  white-space: pre-wrap;
+  font-family: inherit;
+  line-height: 1.6;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #0f172a;
+}
+
 .modal-footer {
   display: flex;
   justify-content: flex-end;
