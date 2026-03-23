@@ -1,9 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = dirname(__filename);
 
 // Caminho do arquivo de log
 const LOG_DIR = path.join(__dirname, '../logs');
@@ -19,124 +20,103 @@ function ensureLogDirectory() {
 }
 
 /**
- * Formata data no padrão brasileiro
+ * Registra a geração de espelhos no arquivo de log
+ * @param {Object} dados - Dados da geração
+ * @param {string} dados.usuario - Nome ou email do usuário
+ * @param {Array} dados.cards - Lista de cards processados
+ * @param {boolean} dados.sucesso - Se a operação foi bem-sucedida
+ * @param {string} dados.erro - Mensagem de erro (se houver)
+ * @param {number} dados.tempoDecorrido - Tempo de processamento em ms
+ * @param {Array} dados.arquivosGerados - Lista de arquivos gerados
  */
-function formatarData(date = new Date()) {
-  const dia = String(date.getDate()).padStart(2, '0');
-  const mes = String(date.getMonth() + 1).padStart(2, '0');
-  const ano = date.getFullYear();
-  const hora = String(date.getHours()).padStart(2, '0');
-  const minuto = String(date.getMinutes()).padStart(2, '0');
-  const segundo = String(date.getSeconds()).padStart(2, '0');
-  
-  return `${dia}/${mes}/${ano} às ${hora}:${minuto}:${segundo}`;
-}
-
-/**
- * Registra uma operação de geração de espelhos
- * @param {Object} logData - Dados da operação
- * @param {string} logData.usuario - Nome ou email do usuário
- * @param {string[]} logData.cards - IDs dos cards processados
- * @param {boolean} logData.sucesso - Se a operação foi bem-sucedida
- * @param {number} logData.quantidadeGerada - Quantidade de espelhos gerados
- * @param {string} logData.erro - Mensagem de erro (se houver)
- * @param {boolean} logData.incluiuPdf - Se incluiu PDF do projeto
- * @param {Object} logData.detalhes - Detalhes adicionais
- */
-export function registrarGeracaoEspelhos(logData) {
+export function registrarGeracaoEspelhos(dados) {
   try {
     ensureLogDirectory();
 
-    const dataHora = formatarData();
-    const usuario = logData.usuario || 'Usuário não identificado';
-    const cards = Array.isArray(logData.cards) ? logData.cards : [];
-    const sucesso = logData.sucesso === true;
-    const quantidadeGerada = logData.quantidadeGerada || 0;
-    const erro = logData.erro || null;
-    const incluiuPdf = logData.incluiuPdf === true;
-    const detalhes = logData.detalhes || {};
+    const timestamp = new Date().toLocaleString('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
 
-    // Monta o registro formatado
     const separador = '='.repeat(80);
-    let registro = `\n${separador}\n`;
-    registro += `DATA/HORA: ${dataHora}\n`;
-    registro += `USUÁRIO: ${usuario}\n`;
-    registro += `OPERAÇÃO: Geração de Espelhos\n`;
-    registro += `\n`;
+    const status = dados.sucesso ? '✅ SUCESSO' : '❌ ERRO';
     
-    // Cards processados
-    registro += `CARDS PROCESSADOS: ${cards.length}\n`;
-    if (cards.length > 0) {
-      cards.forEach((cardId, index) => {
-        registro += `  ${index + 1}. ${cardId}\n`;
-      });
-    }
-    registro += `\n`;
-
-    // Status da operação
-    registro += `STATUS: ${sucesso ? '✓ SUCESSO' : '✗ FALHA'}\n`;
-    if (sucesso) {
-      registro += `ESPELHOS GERADOS: ${quantidadeGerada}\n`;
-      registro += `PDF DO PROJETO INCLUÍDO: ${incluiuPdf ? 'Sim' : 'Não'}\n`;
-    }
+    let logEntry = `\n${separador}\n`;
+    logEntry += `DATA/HORA: ${timestamp}\n`;
+    logEntry += `USUÁRIO: ${dados.usuario}\n`;
+    logEntry += `STATUS: ${status}\n`;
+    logEntry += `CARDS PROCESSADOS (${dados.cards?.length || 0}):\n`;
     
-    if (erro) {
-      registro += `\n`;
-      registro += `ERRO:\n`;
-      registro += `  ${erro}\n`;
-    }
-
-    // Detalhes adicionais
-    if (Object.keys(detalhes).length > 0) {
-      registro += `\n`;
-      registro += `DETALHES ADICIONAIS:\n`;
-      Object.entries(detalhes).forEach(([chave, valor]) => {
-        registro += `  ${chave}: ${valor}\n`;
+    if (dados.cards && dados.cards.length > 0) {
+      dados.cards.forEach((card, index) => {
+        logEntry += `  ${index + 1}. ${card.key || card} - ${card.summary || 'Sem título'}\n`;
       });
     }
 
-    registro += `${separador}\n`;
+    if (dados.tempoDecorrido) {
+      logEntry += `TEMPO DECORRIDO: ${(dados.tempoDecorrido / 1000).toFixed(2)}s\n`;
+    }
 
-    // Adiciona ao arquivo (append)
-    fs.appendFileSync(LOG_FILE, registro, 'utf8');
+    if (dados.arquivosGerados && dados.arquivosGerados.length > 0) {
+      logEntry += `ARQUIVOS GERADOS (${dados.arquivosGerados.length}):\n`;
+      dados.arquivosGerados.forEach((arquivo, index) => {
+        const tamanho = arquivo.tamanho ? ` (${(arquivo.tamanho / 1024).toFixed(2)} KB)` : '';
+        logEntry += `  ${index + 1}. ${arquivo.nome}${tamanho}\n`;
+      });
+    }
 
-    console.log(`📝 Log registrado em: ${LOG_FILE}`);
+    if (!dados.sucesso && dados.erro) {
+      logEntry += `ERRO: ${dados.erro}\n`;
+    }
+
+    logEntry += `${separador}\n`;
+
+    // Adiciona ao arquivo de log
+    fs.appendFileSync(LOG_FILE, logEntry, 'utf8');
+    
+    console.log('📝 Log de geração de espelhos registrado com sucesso');
+    return true;
   } catch (error) {
-    console.error('❌ Erro ao registrar log de espelhos:', error.message);
-    // Não propaga o erro para não impactar a operação principal
+    console.error('❌ Erro ao registrar log de espelhos:', error);
+    return false;
   }
 }
 
 /**
- * Obtém o conteúdo completo do arquivo de log
+ * Obtém todos os logs de espelhos gerados
+ * @returns {string} Conteúdo do arquivo de log
  */
 export function obterLogsEspelhos() {
   try {
-    ensureLogDirectory();
-    
     if (!fs.existsSync(LOG_FILE)) {
-      return '';
+      return 'Nenhum log de espelhos encontrado.';
     }
 
     return fs.readFileSync(LOG_FILE, 'utf8');
   } catch (error) {
-    console.error('❌ Erro ao ler logs de espelhos:', error.message);
-    return '';
+    console.error('❌ Erro ao ler logs de espelhos:', error);
+    return 'Erro ao carregar logs.';
   }
 }
 
 /**
- * Limpa o arquivo de log (usar com cuidado)
+ * Limpa o arquivo de logs (usar com cuidado!)
  */
 export function limparLogsEspelhos() {
   try {
-    ensureLogDirectory();
-    
     if (fs.existsSync(LOG_FILE)) {
       fs.unlinkSync(LOG_FILE);
-      console.log('🗑️ Logs de espelhos limpos');
+      console.log('🗑️ Arquivo de logs limpo com sucesso');
+      return true;
     }
+    return true;
   } catch (error) {
-    console.error('❌ Erro ao limpar logs de espelhos:', error.message);
+    console.error('❌ Erro ao limpar logs:', error);
+    return false;
   }
 }

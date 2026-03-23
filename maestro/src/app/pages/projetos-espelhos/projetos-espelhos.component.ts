@@ -1,5 +1,6 @@
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { finalize, take, timeout } from 'rxjs/operators';
 import { JiraService } from '../../services/jira.service';
 
@@ -18,7 +19,7 @@ interface EspelhoItemDisplay {
 @Component({
   selector: 'app-projetos-espelhos',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './projetos-espelhos.component.html',
   styleUrl: './projetos-espelhos.component.scss'
 })
@@ -33,6 +34,7 @@ export class ProjetosEspelhosComponent implements OnInit {
   showLogsModal = false;
   logsContent = '';
   isLoadingLogs = false;
+  searchTerm = '';
 
   private markedCardIds = new Set<string>();
   private pendingCardIdForFileSelection: string | null = null;
@@ -47,6 +49,10 @@ export class ProjetosEspelhosComponent implements OnInit {
 
   ngOnInit(): void {
     this.carregarAguardandoProjeto();
+  }
+
+  onSearchChange(): void {
+    this.refreshView();
   }
 
   carregarAguardandoProjeto(): void {
@@ -73,7 +79,7 @@ export class ProjetosEspelhosComponent implements OnInit {
           }
 
           this.aguardandoProjetoItems = response.data
-            .filter((issue: any) => this.isStatusAProduzir(issue?.status))
+            .filter((issue: any) => this.isStatusValido(issue?.status))
             .map((issue: any) => ({
               id: (issue?.key || '').toString().trim(),
               resumo: (issue?.resumo || '').toString().trim() || '-',
@@ -95,16 +101,21 @@ export class ProjetosEspelhosComponent implements OnInit {
       });
   }
 
-  private isStatusAProduzir(status: unknown): boolean {
+  private isStatusValido(status: unknown): boolean {
     const normalized = (status || '')
       .toString()
       .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+      .replace(/[\u{1F300}-\u{1F9FF}]/gu, '') // Remove emojis
       .replace(/\s+/g, ' ')
       .trim()
       .toLowerCase();
 
-    return normalized === 'a produzir' || normalized.includes('a produzir');
+    // Aceita "A Produzir" ou "Recebido Não liberado"
+    return normalized === 'a produzir' || 
+           normalized.includes('a produzir') ||
+           normalized === 'recebido nao liberado' ||
+           (normalized.includes('recebido') && normalized.includes('nao liberado'));
   }
 
   getAguardandoProjetoDisplay(item: EspelhoItem): EspelhoItemDisplay {
@@ -173,11 +184,35 @@ export class ProjetosEspelhosComponent implements OnInit {
   }
 
   get filteredAguardandoProjetoItems(): EspelhoItem[] {
+    let items: EspelhoItem[];
+    
+    // Filtrar por tab (Aramida ou Tensylon)
     if (this.activeAguardandoTab === 'tenssylon') {
-      return this.aguardandoProjetoItems.filter((item) => item.id?.toUpperCase().startsWith('TENSYLON-'));
+      items = this.aguardandoProjetoItems.filter((item) => item.id?.toUpperCase().startsWith('TENSYLON-'));
+    } else {
+      items = this.aguardandoProjetoItems.filter((item) => !item.id?.toUpperCase().startsWith('TENSYLON-'));
     }
 
-    return this.aguardandoProjetoItems.filter((item) => !item.id?.toUpperCase().startsWith('TENSYLON-'));
+    // Aplicar filtro de pesquisa
+    if (this.searchTerm && this.searchTerm.trim().length > 0) {
+      const searchLower = this.searchTerm.trim().toLowerCase();
+      
+      items = items.filter((item) => {
+        const osNumber = this.getOsNumberForCard(item.id).toLowerCase();
+        const id = (item.id || '').toLowerCase();
+        const resumo = (item.resumo || '').toLowerCase();
+        const veiculo = (item.veiculo || '').toLowerCase();
+        const previsao = (item.previsao || '').toLowerCase();
+        
+        return osNumber.includes(searchLower) ||
+               id.includes(searchLower) ||
+               resumo.includes(searchLower) ||
+               veiculo.includes(searchLower) ||
+               previsao.includes(searchLower);
+      });
+    }
+
+    return items;
   }
 
   private associateFileWithPendingCard(file: File): void {

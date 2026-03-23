@@ -538,8 +538,8 @@ export const getJiraIssues = async (req, res) => {
     // Verificar se deve filtrar apenas issues sem data de previsão
     const semData = req.query.semData === 'true';
 
-    // Filtro JQL base
-    let jql = '(project = MANTA AND status IN ("A Produzir", "Liberado Engenharia")) OR (project = TENSYLON AND status IN ("A Produzir", "Liberado Engenharia", "Aguardando Acabamento", "Aguardando Autoclave", "Aguardando Corte", "Aguardando montagem"))';
+    // Filtro JQL base - incluindo "Recebido Não liberado" para TENSYLON
+    let jql = '(project = MANTA AND status IN ("A Produzir", "Liberado Engenharia")) OR (project = TENSYLON AND status IN ("A Produzir", "Liberado Engenharia", "Aguardando Acabamento", "Aguardando Autoclave", "Aguardando Corte", "Aguardando montagem", "🔴RECEBIDO NÃO LIBERADO"))';
     
     // Adicionar filtro de data vazia se solicitado
     if (semData) {
@@ -558,7 +558,8 @@ export const getJiraIssues = async (req, res) => {
     const situacoesValidas = [
       '⚪️RECEBIDO ENCAMINHADO',
       '🟢RECEBIDO LIBERADO',
-      '⚫Aguardando entrada'
+      '⚫Aguardando entrada',
+      '🔴RECEBIDO NÃO LIBERADO'
     ];
 
     let allIssues = [];
@@ -737,7 +738,7 @@ export const getContecIssues = async (req, res) => {
     }
 
     // Filtro JQL
-    const jql = '(project = MANTA AND status IN ("A Produzir", "Liberado Engenharia")) OR (project = TENSYLON AND status IN ("A Produzir", "Liberado Engenharia", "Aguardando Acabamento", "Aguardando Autoclave", "Aguardando Corte", "Aguardando montagem"))';
+    const jql = '(project = MANTA AND status IN ("A Produzir", "Liberado Engenharia")) OR (project = TENSYLON AND status IN ("A Produzir", "Liberado Engenharia", "Aguardando Acabamento", "Aguardando Autoclave", "Aguardando Corte", "Aguardando montagem", "🔴RECEBIDO NÃO LIBERADO"))';
 
     const url = `${jiraUrl}/rest/api/3/search/jql`;
     const auth = Buffer.from(`${email}:${apiToken}`).toString('base64');
@@ -750,7 +751,8 @@ export const getContecIssues = async (req, res) => {
     const situacoesValidas = [
       '⚪️RECEBIDO ENCAMINHADO',
       '🟢RECEBIDO LIBERADO',
-      '⚫Aguardando entrada'
+      '⚫Aguardando entrada',
+      '🔴RECEBIDO NÃO LIBERADO'
     ];
 
     let allIssues = [];
