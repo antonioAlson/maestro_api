@@ -92,8 +92,11 @@ export class JiraService {
 
       // Verificar se contém alguma das marcas
       const contemMarca = marcasDestaque.some(marca => veiculoValue.includes(marca));
+      
+      // Exceção: Toyota RAV4 não deve ser pintado de vermelho
+      const isToyotaRAV4 = veiculoValue.includes('toyota') && veiculoValue.includes('rav4');
 
-      if (contemMarca) {
+      if (contemMarca && !isToyotaRAV4) {
         veiculoCell.fill = {
           type: 'pattern',
           pattern: 'solid',
