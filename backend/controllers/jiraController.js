@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { registrarGeracaoEspelhos } from '../utils/espelhos-logger.js';
+import pool from '../config/database.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -2071,6 +2072,33 @@ export const gerarEspelhos = async (req, res) => {
       }
     });
 
+    // Salvar registro no banco de dados
+    try {
+      await pool.query(
+        `INSERT INTO maestro.projetos_espelhos 
+        (card_id, numero_ordem, titulo, usuario_email, usuario_nome, arquivo_pdf, 
+         tamanho_kb, quantidade_pecas, arquivo_projeto_incluido, status, tempo_processamento)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [
+          cardId,
+          numeroOrdem,
+          cardData.titulo || 'Sem título',
+          usuarioEmail,
+          usuarioNome,
+          downloadName,
+          (generatedBuffer.length / 1024).toFixed(2),
+          quantidadePecas,
+          incluiuPdf,
+          'gerado',
+          tempoDecorrido
+        ]
+      );
+      console.log(`✅ Registro salvo no banco de dados: ${cardId}`);
+    } catch (dbError) {
+      console.error('⚠️ Erro ao salvar no banco de dados:', dbError.message);
+      // Não falha a requisição, apenas loga o erro
+    }
+
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
     return res.status(200).send(generatedBuffer);
@@ -2115,6 +2143,163 @@ export const obterLogsEspelhos = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: `Erro ao obter logs: ${error.message}`
+    });
+  }
+};
+
+/**
+ * Lista todos os projetos/espelhos cadastrados
+ */
+export const listarProjetosEspelhos = async (req, res) => {
+  try {
+    const { page = 1, limit = 50, filtro = '', ordenarPor = 'created_at', ordem = 'DESC' } = req.query;
+    const offset = (page - 1) * limit;
+
+    // Construir WHERE clause para filtro
+    let whereClause = '';
+    const queryParams = [];
+    
+    if (filtro) {
+      whereClause = `WHERE (
+        card_id ILIKE $1 OR 
+        numero_ordem ILIKE $1 OR 
+        titulo ILIKE $1 OR 
+        usuario_nome ILIKE $1 OR 
+        usuario_email ILIKE $1
+      )`;
+      queryParams.push(`%${filtro}%`);
+    }
+
+    // Validar ordenação
+    const camposValidos = ['created_at', 'numero_ordem', 'card_id', 'usuario_nome', 'quantidade_pecas'];
+    const orderBy = camposValidos.includes(ordenarPor) ? ordenarPor : 'created_at';
+    const orderDirection = ordem.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
+    // Contar total de registros
+    const countQuery = `SELECT COUNT(*) FROM maestro.projetos_espelhos ${whereClause}`;
+    const countResult = await pool.query(countQuery, queryParams);
+    const total = parseInt(countResult.rows[0].count);
+
+    // Buscar registros paginados
+    const dataQuery = `
+      SELECT 
+        id, card_id, numero_ordem, titulo, usuario_email, usuario_nome,
+        arquivo_pdf, tamanho_kb, quantidade_pecas, arquivo_projeto_incluido,
+        status, tempo_processamento, created_at, updated_at
+      FROM maestro.projetos_espelhos
+      ${whereClause}
+      ORDER BY ${orderBy} ${orderDirection}
+      LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}
+    `;
+    
+    queryParams.push(limit, offset);
+    const dataResult = await pool.query(dataQuery, queryParams);
+
+    return res.status(200).json({
+      success: true,
+      data: dataResult.rows,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('❌ Erro ao listar projetos:', error);
+    return res.status(500).json({
+      success: false,
+      message: `Erro ao listar projetos: ${error.message}`
+    });
+  }
+};
+
+/**
+ * Obtém detalhes de um projeto específico
+ */
+export const obterProjetoEspelho = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `SELECT 
+        id, card_id, numero_ordem, titulo, usuario_email, usuario_nome,
+        arquivo_pdf, tamanho_kb, quantidade_pecas, arquivo_projeto_incluido,
+        status, tempo_processamento, created_at, updated_at
+      FROM maestro.projetos_espelhos
+      WHERE id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Projeto não encontrado'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('❌ Erro ao obter projeto:', error);
+    return res.status(500).json({
+      success: false,
+      message: `Erro ao obter projeto: ${error.message}`
+    });
+  }
+};
+
+/**
+ * Obtém estatísticas dos projetos cadastrados
+ */
+export const obterEstatisticasProjetos = async (req, res) => {
+  try {
+    const stats = await pool.query(`
+      SELECT 
+        COUNT(*) as total_projetos,
+        COUNT(DISTINCT usuario_email) as total_usuarios,
+        SUM(quantidade_pecas) as total_pecas,
+        AVG(tempo_processamento) as tempo_medio,
+        MAX(created_at) as ultima_geracao
+      FROM maestro.projetos_espelhos
+    `);
+
+    const porUsuario = await pool.query(`
+      SELECT 
+        usuario_nome,
+        COUNT(*) as quantidade,
+        SUM(quantidade_pecas) as total_pecas
+      FROM maestro.projetos_espelhos
+      GROUP BY usuario_nome
+      ORDER BY quantidade DESC
+      LIMIT 10
+    `);
+
+    const porDia = await pool.query(`
+      SELECT 
+        DATE(created_at) as data,
+        COUNT(*) as quantidade
+      FROM maestro.projetos_espelhos
+      WHERE created_at >= NOW() - INTERVAL '30 days'
+      GROUP BY DATE(created_at)
+      ORDER BY data DESC
+    `);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        geral: stats.rows[0],
+        porUsuario: porUsuario.rows,
+        porDia: porDia.rows
+      }
+    });
+  } catch (error) {
+    console.error('❌ Erro ao obter estatísticas:', error);
+    return res.status(500).json({
+      success: false,
+      message: `Erro ao obter estatísticas: ${error.message}`
     });
   }
 };

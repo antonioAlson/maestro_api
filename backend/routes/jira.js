@@ -9,7 +9,10 @@ import {
   downloadArquivo,
   downloadArquivoJira,
   gerarEspelhos,
-  obterLogsEspelhos
+  obterLogsEspelhos,
+  listarProjetosEspelhos,
+  obterProjetoEspelho,
+  obterEstatisticasProjetos
 } from '../controllers/jiraController.js';
 import { authenticate } from '../middleware/auth.js';
 
@@ -47,5 +50,15 @@ router.post('/gerar-espelhos', authenticate, upload.array('arquivoProjeto[]', 10
 
 // Obter logs de geração de espelhos
 router.get('/logs-espelhos', authenticate, obterLogsEspelhos);
+
+// NOVOS ENDPOINTS - Gestão de Projetos/Espelhos
+// Listar projetos cadastrados
+router.get('/projetos-espelhos', authenticate, listarProjetosEspelhos);
+
+// Obter detalhes de um projeto específico
+router.get('/projetos-espelhos/:id', authenticate, obterProjetoEspelho);
+
+// Obter estatísticas dos projetos
+router.get('/projetos-espelhos-stats', authenticate, obterEstatisticasProjetos);
 
 export default router;

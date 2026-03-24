@@ -1,14 +1,178 @@
 <div class="cadastro-projetos-container">
   <header class="header">
     <div class="header-content">
-      <h1>Cadastro</h1>
+      <h1>Cadastro de Projetos/Espelhos</h1>
       <img src="opera.png" alt="Opera" class="header-brand" />
     </div>
   </header>
 
   <main class="content">
-    <div class="page-info">
-      <p>Página em desenvolvimento - Cadastro</p>
+    <!-- Barra de ferramentas -->
+    <div class="toolbar">
+      <div class="search-box">
+        <input 
+          type="text" 
+          [(ngModel)]="filtro" 
+          (keyup.enter)="aplicarFiltro()"
+          placeholder="Buscar por card ID, ordem, título ou usuário..."
+          class="search-input">
+        <button (click)="aplicarFiltro()" class="btn btn-primary">Buscar</button>
+        <button (click)="limparFiltro()" class="btn btn-secondary" *ngIf="filtro">Limpar</button>
+      </div>
+      
+      <button (click)="toggleEstatisticas()" class="btn btn-stats">
+        {{ mostrarEstatisticas ? '📊 Ocultar' : '📊 Estatísticas' }}
+      </button>
+    </div>
+
+    <!-- Estatísticas -->
+    <div class="stats-panel" *ngIf="mostrarEstatisticas && estatisticas">
+      <h2>Estatísticas Gerais</h2>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">{{ estatisticas.geral.total_projetos }}</div>
+          <div class="stat-label">Total de Projetos</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">{{ estatisticas.geral.total_usuarios }}</div>
+          <div class="stat-label">Usuários Ativos</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">{{ estatisticas.geral.total_pecas || '0' }}</div>
+          <div class="stat-label">Total de Peças</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">{{ estatisticas.geral.tempo_medio ? (parseFloat(estatisticas.geral.tempo_medio).toFixed(2) + 's') : 'N/A' }}</div>
+          <div class="stat-label">Tempo Médio</div>
+        </div>
+      </div>
+
+      <h3>Top Usuários</h3>
+      <div class="users-list">
+        <div class="user-item" *ngFor="let user of estatisticas.porUsuario.slice(0, 5)">
+          <span class="user-name">{{ user.usuario_nome }}</span>
+          <span class="user-count">{{ user.quantidade }} projetos ({{ user.total_pecas }} peças)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Informações de resultado -->
+    <div class="results-info">
+      <span>Total: {{ totalProjetos }} projetos</span>
+      <span *ngIf="filtro">Mostrando resultados para "{{ filtro }}"</span>
+    </div>
+
+    <!-- Loading -->
+    <div *ngIf="loading" class="loading">
+      Carregando projetos...
+    </div>
+
+    <!-- Erro -->
+    <div *ngIf="error" class="error-message">
+      {{ error }}
+    </div>
+
+    <!-- Tabela de projetos -->
+    <div class="table-container" *ngIf="!loading && !error && projetos.length > 0">
+      <table class="projetos-table">
+        <thead>
+          <tr>
+            <th (click)="ordenarPor('card_id')" class="sortable">
+              Card ID
+              <span class="sort-icon" *ngIf="campoOrdenacao === 'card_id'">
+                {{ ordem === 'ASC' ? '▲' : '▼' }}
+              </span>
+            </th>
+            <th (click)="ordenarPor('numero_ordem')" class="sortable">
+              Nº Ordem
+              <span class="sort-icon" *ngIf="campoOrdenacao === 'numero_ordem'">
+                {{ ordem === 'ASC' ? '▲' : '▼' }}
+              </span>
+            </th>
+            <th>Título</th>
+            <th (click)="ordenarPor('usuario_nome')" class="sortable">
+              Usuário
+              <span class="sort-icon" *ngIf="campoOrdenacao === 'usuario_nome'">
+                {{ ordem === 'ASC' ? '▲' : '▼' }}
+              </span>
+            </th>
+            <th (click)="ordenarPor('quantidade_pecas')" class="sortable text-center">
+              Qtd. Peças
+              <span class="sort-icon" *ngIf="campoOrdenacao === 'quantidade_pecas'">
+                {{ ordem === 'ASC' ? '▲' : '▼' }}
+              </span>
+            </th>
+            <th class="text-center">Arquivo PDF</th>
+            <th class="text-center">Tamanho</th>
+            <th class="text-center">Status</th>
+            <th (click)="ordenarPor('created_at')" class="sortable">
+              Data/Hora
+              <span class="sort-icon" *ngIf="campoOrdenacao === 'created_at'">
+                {{ ordem === 'ASC' ? '▲' : '▼' }}
+              </span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let projeto of projetos" class="projeto-row">
+            <td class="card-id">{{ projeto.card_id }}</td>
+            <td class="numero-ordem">{{ projeto.numero_ordem }}</td>
+            <td class="titulo">{{ projeto.titulo }}</td>
+            <td class="usuario">{{ projeto.usuario_nome }}</td>
+            <td class="text-center">
+              <span class="badge badge-quantidade">{{ projeto.quantidade_pecas }}</span>
+            </td>
+            <td class="text-center">
+              <span class="badge" [class.badge-success]="projeto.arquivo_projeto_incluido" 
+                                   [class.badge-default]="!projeto.arquivo_projeto_incluido">
+                {{ projeto.arquivo_projeto_incluido ? '✓ Incluído' : '✗ Não' }}
+              </span>
+            </td>
+            <td class="text-center tamanho">{{ projeto.tamanho_kb }} KB</td>
+            <td class="text-center">
+              <span class="badge badge-status">{{ projeto.status }}</span>
+            </td>
+            <td class="data">{{ formatarData(projeto.created_at) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Mensagem quando não há resultados -->
+    <div *ngIf="!loading && !error && projetos.length === 0" class="no-results">
+      <p>Nenhum projeto encontrado.</p>
+      <button (click)="limparFiltro()" class="btn btn-primary" *ngIf="filtro">Limpar filtro</button>
+    </div>
+
+    <!-- Paginação -->
+    <div class="pagination" *ngIf="!loading && totalPaginas > 1">
+      <button 
+        (click)="paginaAnterior()" 
+        [disabled]="pagina === 1" 
+        class="btn btn-pagination">
+        ← Anterior
+      </button>
+      
+      <div class="pagination-numbers">
+        <button 
+          *ngFor="let p of getPaginasVisiveis()"
+          (click)="irParaPagina(p)"
+          [class.active]="p === pagina"
+          class="btn btn-page-number">
+          {{ p }}
+        </button>
+      </div>
+      
+      <button 
+        (click)="proximaPagina()" 
+        [disabled]="pagina === totalPaginas" 
+        class="btn btn-pagination">
+        Próxima →
+      </button>
+      
+      <span class="pagination-info">
+        Página {{ pagina }} de {{ totalPaginas }}
+      </span>
     </div>
   </main>
 </div>

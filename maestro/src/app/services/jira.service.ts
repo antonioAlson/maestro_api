@@ -560,4 +560,127 @@ export class JiraService {
     );
   }
 
+  /**
+   * Lista projetos/espelhos cadastrados com paginação e filtro
+   */
+  listarProjetosEspelhos(params: {
+    page?: number;
+    limit?: number;
+    filtro?: string;
+    ordenarPor?: string;
+    ordem?: 'ASC' | 'DESC';
+  } = {}): Observable<ProjetosEspelhosResponse> {
+    console.log('📋 [JiraService] Listando projetos cadastrados:', params);
+    
+    const queryParams = new URLSearchParams();
+    if (params.page) queryParams.append('page', params.page.toString());
+    if (params.limit) queryParams.append('limit', params.limit.toString());
+    if (params.filtro) queryParams.append('filtro', params.filtro);
+    if (params.ordenarPor) queryParams.append('ordenarPor', params.ordenarPor);
+    if (params.ordem) queryParams.append('ordem', params.ordem);
+
+    const url = `${this.apiUrl}/jira/projetos-espelhos?${queryParams.toString()}`;
+    
+    return this.http.get<ProjetosEspelhosResponse>(url).pipe(
+      tap({
+        next: (response) => {
+          console.log('✅ [JiraService] Projetos listados:', response);
+        },
+        error: (error) => {
+          console.error('❌ [JiraService] Erro ao listar projetos:', error);
+        }
+      })
+    );
+  }
+
+  /**
+   * Obtém detalhes de um projeto específico
+   */
+  obterProjetoEspelho(id: number): Observable<ProjetoEspelhoResponse> {
+    console.log('🔍 [JiraService] Buscando projeto:', id);
+    return this.http.get<ProjetoEspelhoResponse>(`${this.apiUrl}/jira/projetos-espelhos/${id}`).pipe(
+      tap({
+        next: (response) => {
+          console.log('✅ [JiraService] Projeto obtido:', response);
+        },
+        error: (error) => {
+          console.error('❌ [JiraService] Erro ao obter projeto:', error);
+        }
+      })
+    );
+  }
+
+  /**
+   * Obtém estatísticas dos projetos cadastrados
+   */
+  obterEstatisticasProjetos(): Observable<EstatisticasProjetosResponse> {
+    console.log('📊 [JiraService] Buscando estatísticas de projetos');
+    return this.http.get<EstatisticasProjetosResponse>(`${this.apiUrl}/jira/projetos-espelhos-stats`).pipe(
+      tap({
+        next: (response) => {
+          console.log('✅ [JiraService] Estatísticas obtidas:', response);
+        },
+        error: (error) => {
+          console.error('❌ [JiraService] Erro ao obter estatísticas:', error);
+        }
+      })
+    );
+  }
+
+}
+
+// Interfaces para os novos endpoints
+export interface ProjetoEspelho {
+  id: number;
+  card_id: string;
+  numero_ordem: string;
+  titulo: string;
+  usuario_email: string;
+  usuario_nome: string;
+  arquivo_pdf: string;
+  tamanho_kb: string;
+  quantidade_pecas: number;
+  arquivo_projeto_incluido: boolean;
+  status: string;
+  tempo_processamento: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjetosEspelhosResponse {
+  success: boolean;
+  data: ProjetoEspelho[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export interface ProjetoEspelhoResponse {
+  success: boolean;
+  data: ProjetoEspelho;
+}
+
+export interface EstatisticasProjetosResponse {
+  success: boolean;
+  data: {
+    geral: {
+      total_projetos: string;
+      total_usuarios: string;
+      total_pecas: string;
+      tempo_medio: string;
+      ultima_geracao: string;
+    };
+    porUsuario: Array<{
+      usuario_nome: string;
+      quantidade: string;
+      total_pecas: string;
+    }>;
+    porDia: Array<{
+      data: string;
+      quantidade: string;
+    }>;
+  };
 }
