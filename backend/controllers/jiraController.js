@@ -554,18 +554,43 @@ function isBlockedReportStatus(statusName, situacao) {
 export const getJiraIssues = async (req, res) => {
   try {
     console.log('🔍 Iniciando busca de issues do Jira...');
+    console.log('👤 Usuário ID:', req.user.id);
+    console.log('📧 Email do usuário:', req.user.email);
 
     // Buscar credenciais do usuário logado
-    const credentials = await getUserJiraCredentials(req.user.id);
+    let credentials;
+    try {
+      credentials = await getUserJiraCredentials(req.user.id);
+      console.log('✅ Credenciais recuperadas do banco');
+      console.log('📧 Email Jira:', credentials.email);
+      console.log('🔑 Token presente:', !!credentials.apiToken);
+    } catch (credError) {
+      console.error('❌ Erro ao buscar credenciais:', credError.message);
+      return res.status(400).json({
+        success: false,
+        message: `Erro ao buscar credenciais: ${credError.message}`
+      });
+    }
+
     const { email, apiToken } = credentials;
 
     const jiraUrl = process.env.JIRA_URL;
+    console.log('🌐 JIRA_URL configurado:', !!jiraUrl);
+    console.log('🌐 JIRA_URL:', jiraUrl);
 
-    if (!jiraUrl || !email || !apiToken) {
-      console.error('❌ Credenciais do Jira não configuradas');
+    if (!jiraUrl) {
+      console.error('❌ JIRA_URL não configurado no .env do servidor');
       return res.status(500).json({
         success: false,
-        message: 'Credenciais do Jira não configuradas no servidor'
+        message: 'JIRA_URL não configurado no servidor. Contate o administrador.'
+      });
+    }
+
+    if (!email || !apiToken) {
+      console.error('❌ Credenciais do usuário incompletas');
+      return res.status(400).json({
+        success: false,
+        message: 'Credenciais do Jira não configuradas para seu usuário. Configure no perfil.'
       });
     }
 
@@ -740,11 +765,34 @@ export const getJiraIssues = async (req, res) => {
 
   } catch (error) {
     console.error('❌ Erro ao buscar issues do Jira:', error.message);
+    console.error('❌ Nome do erro:', error.name);
+    console.error('❌ Stack:', error.stack);
+    
+    // Erro da API do Jira
     if (error.response) {
-      console.error('Response status:', error.response.status);
-      console.error('Response data:', error.response.data);
+      console.error('❌ Response status:', error.response.status);
+      console.error('❌ Response statusText:', error.response.statusText);
+      console.error('❌ Response data:', JSON.stringify(error.response.data, null, 2));
+      
+      return res.status(error.response.status).json({
+        success: false,
+        message: `Erro na API do Jira (${error.response.status}): ${error.response.data?.errorMessages?.[0] || error.response.statusText}`,
+        details: error.response.data
+      });
     }
     
+    // Erro de rede ou timeout
+    if (error.request) {
+      console.error('❌ Nenhuma resposta recebida do Jira');
+      console.error('❌ Request:', error.request);
+      
+      return res.status(503).json({
+        success: false,
+        message: 'Não foi possível conectar ao Jira. Verifique a URL e a conexão de rede.'
+      });
+    }
+    
+    // Outros erros
     return res.status(500).json({
       success: false,
       message: 'Erro ao buscar dados do Jira: ' + error.message
@@ -758,18 +806,43 @@ export const getJiraIssues = async (req, res) => {
 export const getContecIssues = async (req, res) => {
   try {
     console.log('🔍 Iniciando busca de issues CONTEC do Jira...');
+    console.log('👤 Usuário ID:', req.user.id);
+    console.log('📧 Email do usuário:', req.user.email);
 
     // Buscar credenciais do usuário logado
-    const credentials = await getUserJiraCredentials(req.user.id);
+    let credentials;
+    try {
+      credentials = await getUserJiraCredentials(req.user.id);
+      console.log('✅ Credenciais CONTEC recuperadas do banco');
+      console.log('📧 Email Jira:', credentials.email);
+      console.log('🔑 Token presente:', !!credentials.apiToken);
+    } catch (credError) {
+      console.error('❌ Erro ao buscar credenciais CONTEC:', credError.message);
+      return res.status(400).json({
+        success: false,
+        message: `Erro ao buscar credenciais: ${credError.message}`
+      });
+    }
+
     const { email, apiToken } = credentials;
 
     const jiraUrl = process.env.JIRA_URL;
+    console.log('🌐 JIRA_URL configurado:', !!jiraUrl);
+    console.log('🌐 JIRA_URL:', jiraUrl);
 
-    if (!jiraUrl || !email || !apiToken) {
-      console.error('❌ Credenciais do Jira não configuradas');
+    if (!jiraUrl) {
+      console.error('❌ JIRA_URL não configurado no .env do servidor');
       return res.status(500).json({
         success: false,
-        message: 'Credenciais do Jira não configuradas no servidor'
+        message: 'JIRA_URL não configurado no servidor. Contate o administrador.'
+      });
+    }
+
+    if (!email || !apiToken) {
+      console.error('❌ Credenciais do usuário incompletas');
+      return res.status(400).json({
+        success: false,
+        message: 'Credenciais do Jira não configuradas para seu usuário. Configure no perfil.'
       });
     }
 
@@ -941,11 +1014,34 @@ export const getContecIssues = async (req, res) => {
 
   } catch (error) {
     console.error('❌ Erro ao buscar issues CONTEC do Jira:', error.message);
+    console.error('❌ Nome do erro:', error.name);
+    console.error('❌ Stack:', error.stack);
+    
+    // Erro da API do Jira
     if (error.response) {
-      console.error('Response status:', error.response.status);
-      console.error('Response data:', error.response.data);
+      console.error('❌ Response status:', error.response.status);
+      console.error('❌ Response statusText:', error.response.statusText);
+      console.error('❌ Response data:', JSON.stringify(error.response.data, null, 2));
+      
+      return res.status(error.response.status).json({
+        success: false,
+        message: `Erro na API do Jira (${error.response.status}): ${error.response.data?.errorMessages?.[0] || error.response.statusText}`,
+        details: error.response.data
+      });
     }
     
+    // Erro de rede ou timeout
+    if (error.request) {
+      console.error('❌ Nenhuma resposta recebida do Jira');
+      console.error('❌ Request:', error.request);
+      
+      return res.status(503).json({
+        success: false,
+        message: 'Não foi possível conectar ao Jira. Verifique a URL e a conexão de rede.'
+      });
+    }
+    
+    // Outros erros
     return res.status(500).json({
       success: false,
       message: 'Erro ao buscar dados CONTEC do Jira: ' + error.message

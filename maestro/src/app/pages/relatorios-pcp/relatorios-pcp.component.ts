@@ -69,9 +69,25 @@ export class RelatoriosPcpComponent implements OnInit {
           message: error.message,
           error: error.error
         });
+        
+        // Tentar extrair mensagem específica do backend
+        let errorMessage = 'Erro ao gerar relatório.';
+        
+        if (error.error?.message) {
+          errorMessage = error.error.message;
+        } else if (error.status === 400) {
+          errorMessage = 'Credenciais do Jira não configuradas. Configure no perfil.';
+        } else if (error.status === 401) {
+          errorMessage = 'Sessão expirada. Faça login novamente.';
+        } else if (error.status === 503) {
+          errorMessage = 'Não foi possível conectar ao Jira. Verifique a conexão.';
+        } else if (error.status === 0) {
+          errorMessage = 'Não foi possível conectar ao servidor. Verifique sua conexão.';
+        }
+        
         this.runUiUpdate(() => {
           this.isGenerating = false;
-          this.message = 'Erro ao gerar relatório. Verifique as credenciais do Jira.';
+          this.message = errorMessage;
           this.messageType = 'error';
         });
         
@@ -124,9 +140,25 @@ export class RelatoriosPcpComponent implements OnInit {
           message: error.message,
           error: error.error
         });
+        
+        // Tentar extrair mensagem específica do backend
+        let errorMessage = 'Erro ao gerar relatório CONTEC.';
+        
+        if (error.error?.message) {
+          errorMessage = error.error.message;
+        } else if (error.status === 400) {
+          errorMessage = 'Credenciais do Jira não configuradas. Configure no perfil.';
+        } else if (error.status === 401) {
+          errorMessage = 'Sessão expirada. Faça login novamente.';
+        } else if (error.status === 503) {
+          errorMessage = 'Não foi possível conectar ao Jira. Verifique a conexão.';
+        } else if (error.status === 0) {
+          errorMessage = 'Não foi possível conectar ao servidor. Verifique sua conexão.';
+        }
+        
         this.runUiUpdate(() => {
           this.isGeneratingContec = false;
-          this.message = 'Erro ao gerar relatório CONTEC.';
+          this.message = errorMessage;
           this.messageType = 'error';
         });
         
