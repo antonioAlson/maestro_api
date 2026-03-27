@@ -416,14 +416,6 @@ async function criarEspelhoPdfDoCodigo(
     });
   });
   
-  page.drawText(`Fo 22.1 – Rev.0`, {
-    x: width - 320,
-    y: footerY - 10,
-    size: 7,
-    font: font,
-    color: rgb(0.42, 0.42, 0.42)
-  });
-
   // Desenha o QR por último para ficar sobreposto
   page.drawImage(qrImage, {
     x: qrX,
@@ -431,6 +423,18 @@ async function criarEspelhoPdfDoCodigo(
     width: qrSize,
     height: qrSize
   });
+
+  const revisaoText = 'Fo 21.1 - REV. 1';
+  const revisaoSize = 7;
+  const revisaoWidth = font.widthOfTextAtSize(revisaoText, revisaoSize);
+  page.drawText(revisaoText, {
+    x: qrX + (qrSize / 2) - (revisaoWidth / 2),
+    y: qrY - 12,
+    size: revisaoSize,
+    font: font,
+    color: rgb(0.42, 0.42, 0.42)
+  });
+
   console.log('✅ [6/7] QR code adicionado (sobreposto)');
 
   // Converte Uint8Array para Buffer
@@ -460,6 +464,216 @@ async function mesclarPdfBuffers(primaryPdfBuffer, secondaryPdfBuffer) {
   secondaryPages.forEach((page) => mergedPdf.addPage(page));
 
   return await mergedPdf.save();
+}
+
+async function criarUltimaFolhaAramida(cardData, quantidadeTampas = 1) {
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage([595.28, 841.89]);
+  const { width, height } = page.getSize();
+
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+  const backendRoot = path.join(__dirname, '..');
+  const footerCandidates = [
+    path.join(backendRoot, 'scripts', 'projetos', 'logo-footer.png'),
+    path.join(backendRoot, 'scripts', 'projetos', 'footer.png')
+  ];
+  const footerPath = footerCandidates.find((candidate) => fs.existsSync(candidate));
+  const topLogoPath = path.join(backendRoot, 'scripts', 'projetos', 'logo.png');
+
+  const marginLeft = 60;
+  let yPos = height - 88;
+
+  if (fs.existsSync(topLogoPath)) {
+    try {
+      let topLogoBytes = await fs.promises.readFile(topLogoPath);
+      const isBase64TopLogo = topLogoBytes.toString('utf8', 0, 8).startsWith('iVBORw0K');
+
+      if (isBase64TopLogo) {
+        topLogoBytes = Buffer.from(topLogoBytes.toString('utf8'), 'base64');
+      }
+
+      const topLogoImage = await pdfDoc.embedPng(topLogoBytes);
+      const topLogoDims = topLogoImage.scale(1);
+      const topLogoWidth = 95;
+      const topLogoHeight = (topLogoDims.height / topLogoDims.width) * topLogoWidth;
+
+      page.drawImage(topLogoImage, {
+        x: (width - topLogoWidth) / 2,
+        y: yPos,
+        width: topLogoWidth,
+        height: topLogoHeight
+      });
+    } catch {
+      page.drawText('OPERA', {
+        x: width / 2 - 25,
+        y: yPos,
+        size: 14,
+        font: fontBold,
+        color: rgb(0.4, 0.6, 0.8)
+      });
+    }
+  }
+
+  page.drawText('Pacote 2 - Tampa', {
+    x: width - 180,
+    y: height - 58,
+    size: 14,
+    font: font,
+    color: rgb(0.12, 0.3, 0.5)
+  });
+
+  yPos = height - 170;
+  const titulo = 'Aramida';
+  const tituloSize = 21;
+  const tituloWidth = fontBold.widthOfTextAtSize(titulo, tituloSize);
+  const tituloX = width / 2 - (tituloWidth / 2);
+
+  page.drawRectangle({
+    x: tituloX - 6,
+    y: yPos - 4,
+    width: tituloWidth + 12,
+    height: tituloSize + 7,
+    color: rgb(1, 0.84, 0.62)
+  });
+
+  page.drawText(titulo, {
+    x: tituloX,
+    y: yPos,
+    size: tituloSize,
+    font: fontBold,
+    color: rgb(0, 0, 0)
+  });
+
+  yPos -= 58;
+  page.drawRectangle({
+    x: marginLeft,
+    y: yPos,
+    width: 115,
+    height: 19,
+    color: rgb(0.05, 0.12, 0.62)
+  });
+
+  page.drawText('Tampa traseira', {
+    x: marginLeft + 8,
+    y: yPos + 4,
+    size: 14,
+    font: fontBold,
+    color: rgb(1, 1, 1)
+  });
+
+  yPos -= 52;
+  const labelSize = 19;
+  const valueSize = 19;
+  const lineHeight = 50;
+  const fields = [
+    { label: 'Modelo:', value: cardData.modeloVeiculo },
+    { label: 'Projeto:', value: cardData.numeroProjeto },
+    { label: 'OS:', value: cardData.numeroOrdem },
+    { label: 'Quantidade de peças:', value: String(quantidadeTampas) }
+  ];
+
+  fields.forEach((field) => {
+    const labelText = String(field.label || '');
+    const valueText = String(field.value || '');
+
+    page.drawText(labelText, {
+      x: marginLeft,
+      y: yPos,
+      size: labelSize,
+      font: fontBold,
+      color: rgb(0, 0, 0)
+    });
+
+    const labelWidth = fontBold.widthOfTextAtSize(labelText, labelSize);
+    page.drawText(valueText, {
+      x: marginLeft + labelWidth + 6,
+      y: yPos,
+      size: valueSize,
+      font,
+      color: rgb(0, 0, 0)
+    });
+
+    yPos -= lineHeight;
+  });
+
+  if (footerPath) {
+    try {
+      let logoBytes = await fs.promises.readFile(footerPath);
+      const isBase64 = logoBytes.toString('utf8', 0, 8).startsWith('iVBORw0K');
+
+      if (isBase64) {
+        logoBytes = Buffer.from(logoBytes.toString('utf8'), 'base64');
+      }
+
+      const logoImage = await pdfDoc.embedPng(logoBytes);
+      const logoDims = logoImage.scale(1);
+      const footerWidth = width;
+      const footerHeight = (logoDims.height / logoDims.width) * footerWidth;
+
+      page.drawImage(logoImage, {
+        x: 0,
+        y: 0,
+        width: footerWidth,
+        height: footerHeight,
+        opacity: 0.9
+      });
+    } catch {
+      // Segue sem imagem de rodapé em caso de falha.
+    }
+  }
+
+  const footerY = 80;
+  page.drawText('Avenida Tucunaré 421', {
+    x: marginLeft - 28,
+    y: footerY,
+    size: 7,
+    font,
+    color: rgb(0.36, 0.36, 0.36)
+  });
+
+  page.drawText('Tamboré • Barueri – SP', {
+    x: marginLeft - 28,
+    y: footerY - 10,
+    size: 7,
+    font,
+    color: rgb(0.36, 0.36, 0.36)
+  });
+
+  page.drawText('CEP 06460-020', {
+    x: marginLeft - 28,
+    y: footerY - 20,
+    size: 7,
+    font,
+    color: rgb(0.36, 0.36, 0.36)
+  });
+
+  page.drawText('+55 11 0000 0000', {
+    x: marginLeft - 28,
+    y: footerY - 30,
+    size: 7,
+    font,
+    color: rgb(0.36, 0.36, 0.36)
+  });
+
+  page.drawText('www.operacomposite.com', {
+    x: marginLeft - 28,
+    y: footerY - 40,
+    size: 7,
+    font,
+    color: rgb(0.36, 0.36, 0.36)
+  });
+
+  page.drawText('Fo 21.1 - REV. 1', {
+    x: width - 335,
+    y: footerY - 10,
+    size: 7,
+    font,
+    color: rgb(0.42, 0.42, 0.42)
+  });
+
+  return Buffer.from(await pdfDoc.save());
 }
 
 function formatJiraDate(rawDate) {
@@ -2149,6 +2363,7 @@ export const gerarEspelhos = async (req, res) => {
     let arquivosProjetoBuffers = [];
     const incluiuPdf = Array.isArray(req.files) && req.files.length > 0;
     const quantidadePecas = parseInt(req.body.quantidade) || 1; // Capturar quantidade de peças
+    const quantidadeTampas = parseInt(req.body.quantidadeTampas) || quantidadePecas;
     const consumoCampos = {
       c8: String(req.body?.consumo8c || '').trim(),
       c9: String(req.body?.consumo9c || '').trim(),
@@ -2184,6 +2399,8 @@ export const gerarEspelhos = async (req, res) => {
 
     const cardId = normalizedIds[0];
     const cardData = await buscarDadosCardEspelho(cardId, email, apiToken);
+    const cardIdentifier = `${cardData.id || ''} ${cardData.numeroOrdem || ''} ${cardData.numeroProjeto || ''}`;
+    const isAramidaCard = !/TENSYLON/i.test(cardIdentifier);
     const numeroOrdem = sanitizeFileName(String(cardData.numeroOrdem || cardId));
     let generatedBuffer;
     let contentType = 'application/pdf';
@@ -2242,6 +2459,12 @@ export const gerarEspelhos = async (req, res) => {
           message: `Nao foi possivel juntar o espelho com os arquivos selecionados: ${mergeError.message}`
         });
       }
+    }
+
+    if (isAramidaCard) {
+      // Para Aramida, a ultima folha deve conter apenas os campos do layout simplificado.
+      const ultimaFolhaAramida = await criarUltimaFolhaAramida(cardData, quantidadeTampas);
+      generatedBuffer = Buffer.from(await mesclarPdfBuffers(generatedBuffer, ultimaFolhaAramida));
     }
 
     try {

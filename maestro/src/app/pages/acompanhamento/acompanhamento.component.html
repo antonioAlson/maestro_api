@@ -20,6 +20,24 @@
     </div>
   </header>
 
+  <div class="update-card-bar">
+    <label for="card-id-input">ID(s) do Card:</label>
+    <input
+      id="card-id-input"
+      type="text"
+      [(ngModel)]="cardIdInput"
+      placeholder="Ex: MANTA-123, MANTA-124 ou por quebra de linha"
+      [disabled]="isAtualizandoCard"
+    />
+    <button type="button" (click)="atualizarPorCardId()" [disabled]="isAtualizandoCard">
+      {{ isAtualizandoCard ? 'Atualizando...' : 'Atualizar Cards' }}
+    </button>
+  </div>
+
+  <div class="update-feedback" *ngIf="updateMessage" [class.success]="updateMessageType === 'success'" [class.error]="updateMessageType === 'error'">
+    {{ updateMessage }}
+  </div>
+
   <!-- Loading -->
   <div class="loading-container" *ngIf="isLoading">
     <div class="spinner"></div>

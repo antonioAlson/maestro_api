@@ -81,6 +81,64 @@
   }
 }
 
+.update-card-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.6rem 0 0.5rem;
+
+  label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #003366;
+  }
+
+  input {
+    height: 2rem;
+    min-width: 180px;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    padding: 0 0.6rem;
+    font-size: 0.85rem;
+  }
+
+  button {
+    height: 2rem;
+    border: none;
+    border-radius: 4px;
+    padding: 0 0.9rem;
+    background: #003366;
+    color: #ffffff;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+  }
+}
+
+.update-feedback {
+  font-size: 0.82rem;
+  margin: 0 0 0.6rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+
+  &.success {
+    background: #ecfdf3;
+    color: #166534;
+    border: 1px solid #86efac;
+  }
+
+  &.error {
+    background: #fef2f2;
+    color: #991b1b;
+    border: 1px solid #fca5a5;
+  }
+}
+
 // Loading
 .loading-container {
   display: flex;
@@ -228,10 +286,10 @@
       }
       
       &.status-proximo {
-        background: #fff3cd !important; // Amarelo claro
+        background: #ffffff !important;
         
         &:hover {
-          background: #ffe8a1 !important;
+          background: #f9fafb !important;
         }
       }
       
@@ -360,6 +418,19 @@
   .cronograma-container {
     padding: 0.75rem;
   }
+
+  .update-card-bar {
+    flex-wrap: wrap;
+
+    label {
+      width: 100%;
+    }
+
+    input,
+    button {
+      width: 100%;
+    }
+  }
   
   .cronograma-table {
     font-size: 0.75rem;
@@ -374,7 +445,7 @@
 // Estilos para impressão
 @page {
   size: A4 portrait;
-  margin: 8mm;
+  margin: 4mm;
 }
 
 @media print {
@@ -385,9 +456,17 @@
   .print-button-container {
     display: none;
   }
+
+  .update-card-bar,
+  .update-feedback {
+    display: none;
+  }
   
   .cronograma-container {
-    padding: 0.3rem;
+    padding: 0 !important;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
     min-height: auto;
     overflow: visible !important;
   }
@@ -395,8 +474,10 @@
   .cronograma-header {
     display: grid !important;
     grid-template-columns: auto 1fr auto;
-    padding: 0.4rem 0.6rem;
-    border-width: 1px;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid #003366 !important;
+    border-radius: 0;
+    margin-bottom: 0;
     page-break-inside: avoid;
     page-break-after: avoid;
     gap: 0.5rem;
@@ -442,8 +523,10 @@
   }
   
   .table-wrapper {
-    border: 1px solid #003366;
+    border: 1px solid #003366 !important;
     box-shadow: none;
+    border-radius: 0;
+    margin-top: 0;
     overflow: visible !important;
   }
   
@@ -462,6 +545,7 @@
         padding: 0.35rem 0.4rem;
         font-size: 0.66rem;
         line-height: 1.2;
+        border: 1px solid #1f4b80 !important;
       }
     }
     
@@ -471,10 +555,12 @@
       tr {
         page-break-inside: avoid;
         page-break-after: auto;
+        border-bottom: 1px solid #b6c2d1 !important;
 
         td {
           padding: 0.3rem 0.4rem;
           line-height: 1.2;
+          border: 1px solid #c7d2de !important;
         }
 
         &.status-liberado {
@@ -484,7 +570,7 @@
         }
         
         &.status-proximo {
-          background: #fff3cd !important;
+          background: #ffffff !important;
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
         }

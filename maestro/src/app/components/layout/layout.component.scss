@@ -21,3 +21,22 @@
     margin-left: 70px;
   }
 }
+
+@media print {
+  .layout-container {
+    display: block;
+    min-height: auto;
+    background: #ffffff;
+  }
+
+  app-sidebar {
+    display: none !important;
+  }
+
+  .main-content,
+  .layout-container.sidebar-collapsed .main-content {
+    margin-left: 0 !important;
+    width: 100% !important;
+    min-height: auto;
+  }
+}

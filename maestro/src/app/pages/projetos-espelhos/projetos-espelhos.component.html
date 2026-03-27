@@ -193,6 +193,19 @@
       </div>
 
       <div class="form-group" *ngIf="!isPendingCardTensylon()">
+        <label for="quantidadeTampas">Quantidade de tampas (contra capa):</label>
+        <input
+          type="number"
+          id="quantidadeTampas"
+          class="input-quantidade"
+          [(ngModel)]="quantidadeTampas"
+          min="1"
+          max="9999"
+          placeholder="Digite a quantidade de tampas"
+        />
+      </div>
+
+      <div class="form-group" *ngIf="!isPendingCardTensylon()">
         <label for="consumo8c">Consumo 8C:</label>
         <input
           type="text"
@@ -228,7 +241,7 @@
 
     <div class="modal-footer">
       <button type="button" class="btn-secondary" (click)="cancelarQuantidade()">Cancelar</button>
-      <button type="button" class="btn-primary" (click)="confirmarQuantidade()" [disabled]="!quantidadePecas || quantidadePecas < 1">
+      <button type="button" class="btn-primary" (click)="confirmarQuantidade()" [disabled]="!quantidadePecas || quantidadePecas < 1 || (!isPendingCardTensylon() && (!quantidadeTampas || quantidadeTampas < 1))">
         Confirmar
       </button>
     </div>
