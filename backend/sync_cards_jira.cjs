@@ -159,3 +159,5 @@ cron.schedule("*/5 * * * *", async () => {
   rodando = false;
 });
 
+// execução inicial
+processar();
