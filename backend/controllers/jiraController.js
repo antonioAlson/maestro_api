@@ -939,7 +939,8 @@ export const getJiraIssues = async (req, res) => {
           'status',
           'customfield_10039',
           'customfield_11298',
-          'customfield_10245'
+          'customfield_10245',
+          'customfield_11353'
         ].join(',')
       };
 
@@ -1017,6 +1018,21 @@ export const getJiraIssues = async (req, res) => {
         previsao = formatJiraDate(previsaoRaw);
       }
 
+      // NÚMERO DO PROJETO
+      let numeroProjeto = '';
+      const numeroProjetoRaw = fields.customfield_11353;
+      if (numeroProjetoRaw && typeof numeroProjetoRaw === 'object' && numeroProjetoRaw.value) {
+        numeroProjeto = String(numeroProjetoRaw.value).trim();
+      } else if (numeroProjetoRaw) {
+        numeroProjeto = String(numeroProjetoRaw).trim();
+      }
+
+      if (!numeroProjeto) {
+        const resumoValue = String(fields.summary || '').trim();
+        const projetoMatch = resumoValue.match(/\b[A-Z]\d{1,2}\.\d{6,8}\.[A-Z]{2}\b/i);
+        numeroProjeto = projetoMatch ? projetoMatch[0].toUpperCase() : '';
+      }
+
       // Extrair número do resumo (se houver)
       const resumoTexto = fields.summary || '';
       const numerosEncontrados = resumoTexto.match(/\d+/g);
@@ -1028,7 +1044,8 @@ export const getJiraIssues = async (req, res) => {
         status: statusName,
         situacao: situacao,
         veiculo: veiculo,
-        previsao: previsao
+        previsao: previsao,
+        numeroProjeto: numeroProjeto || '-'
       });
     }
 

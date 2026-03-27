@@ -9,6 +9,7 @@ interface EspelhoItem {
   resumo: string;
   veiculo: string;
   previsao: string;
+  numeroProjeto: string;
 }
 
 interface EspelhoItemDisplay {
@@ -103,7 +104,8 @@ export class ProjetosEspelhosComponent implements OnInit {
               id: (issue?.key || '').toString().trim(),
               resumo: (issue?.resumo || '').toString().trim() || '-',
               veiculo: (issue?.veiculo || '').toString().trim() || '-',
-              previsao: (issue?.previsao || '').toString().trim() || '-'
+              previsao: (issue?.previsao || '').toString().trim() || '-',
+              numeroProjeto: (issue?.numeroProjeto || '').toString().trim() || '-'
             }));
 
           this.refreshView();
@@ -142,13 +144,15 @@ export class ProjetosEspelhosComponent implements OnInit {
     const resumoSemOs = this.removerOsDoResumo(item.resumo, osNumber);
     const resumo = this.abreviarResumo(resumoSemOs);
     const veiculo = this.abreviarVeiculo(item.veiculo);
+    const numeroProjeto = String(item.numeroProjeto || '').trim() || '-';
+    const projetoLabel = numeroProjeto !== '-' ? `Projeto: ${numeroProjeto}` : '-';
 
-    const text = [osNumber, veiculo, resumo, item.previsao]
+    const text = [osNumber, veiculo, resumo, projetoLabel]
       .map((value) => String(value || '').trim())
       .filter((value) => value.length > 0 && value !== '-')
       .join(' - ');
 
-    const fullText = [osNumber, resumoSemOs, item.veiculo, item.previsao]
+    const fullText = [osNumber, resumoSemOs, item.veiculo, projetoLabel]
       .map((value) => String(value || '').trim())
       .filter((value) => value.length > 0 && value !== '-')
       .join(' - ');
