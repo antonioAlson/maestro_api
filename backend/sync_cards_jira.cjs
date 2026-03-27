@@ -2,7 +2,6 @@ require("dotenv").config();
 
 const axios = require("axios");
 const cron = require("node-cron");
-const dayjs = require("dayjs");
 const { Pool } = require("pg");
 let rodando = false;
 
