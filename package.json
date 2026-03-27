@@ -13,7 +13,12 @@
     "create:test-user": "cd backend && npm run create-test-user"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "axios": "^1.13.6",
+    "bcrypt": "^6.0.0",
+    "dayjs": "^1.11.20",
+    "dotenv": "^17.3.1",
+    "node-cron": "^4.2.1"
   },
   "dependencies": {
     "axios": "^1.13.6",
