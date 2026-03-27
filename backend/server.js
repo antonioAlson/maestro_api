@@ -109,4 +109,4 @@ process.on('uncaughtException', (err) => {
 });
 
 //Carrega a automação de atualização dos cards no banco
-require("./sync_cards_jira.cjs");
+import "./sync_cards_jira.cjs";
