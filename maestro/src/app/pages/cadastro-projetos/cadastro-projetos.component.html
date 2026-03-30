@@ -281,7 +281,7 @@
 
         <div class="form-row specs-row">
           <div class="form-group">
-            <label for="spec_8c">8C</label>
+            <label for="spec_8c">8C (mm)</label>
             <input
               type="text"
               id="spec_8c"
@@ -291,7 +291,7 @@
           </div>
 
           <div class="form-group">
-            <label for="spec_9c">9C</label>
+            <label for="spec_9c">9C (mm)</label>
             <input
               type="text"
               id="spec_9c"
@@ -301,13 +301,103 @@
           </div>
 
           <div class="form-group">
-            <label for="spec_11c">11C</label>
+            <label for="spec_11c">11C (mm)</label>
             <input
               type="text"
               id="spec_11c"
               [(ngModel)]="novoProjeto.spec_11c"
               name="spec_11c"
               placeholder="Informe 11C">
+          </div>
+        </div>
+
+        <div class="specs-title-line">
+          <span>Metro Quadrado (m²)</span>
+        </div>
+
+        <div class="form-row specs-row">
+          <div class="form-group">
+            <label for="metro_quadrado_8c">8C (m²)</label>
+            <input
+              type="number"
+              id="metro_quadrado_8c"
+              [(ngModel)]="novoProjeto.metro_quadrado_8c"
+              name="metro_quadrado_8c"
+              disabled
+              min="0"
+              step="0.01"
+              placeholder="0.00">
+          </div>
+
+          <div class="form-group">
+            <label for="metro_quadrado_9c">9C (m²)</label>
+            <input
+              type="number"
+              id="metro_quadrado_9c"
+              [(ngModel)]="novoProjeto.metro_quadrado_9c"
+              name="metro_quadrado_9c"
+              disabled
+              min="0"
+              step="0.01"
+              placeholder="0.00">
+          </div>
+
+          <div class="form-group">
+            <label for="metro_quadrado_11c">11C (m²)</label>
+            <input
+              type="number"
+              id="metro_quadrado_11c"
+              [(ngModel)]="novoProjeto.metro_quadrado_11c"
+              name="metro_quadrado_11c"
+              disabled
+              min="0"
+              step="0.01"
+              placeholder="0.00">
+          </div>
+        </div>
+
+        <div class="specs-title-line">
+          <span>Quantidade de Placas</span>
+        </div>
+
+        <div class="form-row specs-row">
+          <div class="form-group">
+            <label for="quantidade_placas_8c">8C (un)</label>
+            <input
+              type="number"
+              id="quantidade_placas_8c"
+              [(ngModel)]="novoProjeto.quantidade_placas_8c"
+              name="quantidade_placas_8c"
+              disabled
+              min="0"
+              step="1"
+              placeholder="0">
+          </div>
+
+          <div class="form-group">
+            <label for="quantidade_placas_9c">9C (un)</label>
+            <input
+              type="number"
+              id="quantidade_placas_9c"
+              [(ngModel)]="novoProjeto.quantidade_placas_9c"
+              name="quantidade_placas_9c"
+              disabled
+              min="0"
+              step="1"
+              placeholder="0">
+          </div>
+
+          <div class="form-group">
+            <label for="quantidade_placas_11c">11C (un)</label>
+            <input
+              type="number"
+              id="quantidade_placas_11c"
+              [(ngModel)]="novoProjeto.quantidade_placas_11c"
+              name="quantidade_placas_11c"
+              disabled
+              min="0"
+              step="1"
+              placeholder="0">
           </div>
         </div>
       </form>
