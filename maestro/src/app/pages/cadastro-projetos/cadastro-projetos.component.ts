@@ -26,31 +26,16 @@ export class CadastroProjetosComponent implements OnInit {
   campoOrdenacao: string = 'id';
   ordem: 'ASC' | 'DESC' = 'DESC';
 
+  // Controle de abas
+  abaAtiva: 'geral' | 'camadas' = 'geral';
+
   // Modal de novo cadastro
   mostrarModal: boolean = false;
   salvandoProjeto: boolean = false;
   
   // Listas para campos do formulário
-  tiposMaterial: string[] = ['MANTA', 'VIDRO', 'POLICARBONATO', 'ACRILICO'];
-  marcas: string[] = ['Audi', 'BMW', 'Mercedes', 'Volkswagen', 'Ford', 'Chevrolet', 'Fiat', 'Honda', 'Toyota', 'Hyundai', 'Nissan', 'Renault', 'Peugeot', 'Citroën'];
-  modelos: string[] = [];
-  
-  modelosPorMarca: { [key: string]: string[] } = {
-    'Audi': ['A1', 'A3', 'A4', 'A5', 'A6', 'Q3', 'Q5', 'Q7', 'Q8', 'TT'],
-    'BMW': ['Série 1', 'Série 3', 'Série 5', 'X1', 'X3', 'X5', 'X6'],
-    'Mercedes': ['Classe A', 'Classe C', 'Classe E', 'GLA', 'GLC', 'GLE'],
-    'Volkswagen': ['Gol', 'Polo', 'Golf', 'Jetta', 'Passat', 'Tiguan', 'T-Cross'],
-    'Ford': ['Ka', 'Fiesta', 'Focus', 'Fusion', 'EcoSport', 'Ranger'],
-    'Chevrolet': ['Onix', 'Prisma', 'Cruze', 'Tracker', 'S10'],
-    'Fiat': ['Uno', 'Palio', 'Argo', 'Cronos', 'Toro', 'Mobi'],
-    'Honda': ['Civic', 'City', 'Fit', 'HR-V', 'CR-V'],
-    'Toyota': ['Corolla', 'Hilux', 'RAV4', 'Yaris', 'Etios'],
-    'Hyundai': ['HB20', 'Creta', 'Tucson', 'Santa Fe'],
-    'Nissan': ['March', 'Versa', 'Sentra', 'Kicks', 'Frontier'],
-    'Renault': ['Kwid', 'Sandero', 'Logan', 'Duster', 'Captur'],
-    'Peugeot': ['208', '308', '2008', '3008'],
-    'Citroën': ['C3', 'C4 Cactus', 'Aircross']
-  };
+  tiposMaterial: string[] = ['MANTA', 'TENSYLON'];
+  marcas: string[] = [];
   
   // Formulário de novo projeto
   novoProjeto = {
@@ -71,6 +56,29 @@ export class CadastroProjetosComponent implements OnInit {
   ngOnInit(): void {
     console.log('CadastroProjetosComponent inicializado');
     this.carregarProjetos();
+    this.carregarMarcas();
+  }
+
+  carregarMarcas(): void {
+    console.log('🏷️ Carregando marcas do banco de dados...');
+    
+    this.jiraService.obterMarcasUnicas().subscribe({
+      next: (marcas) => {
+        this.marcas = marcas;
+        console.log(`✅ ${marcas.length} marcas carregadas:`, marcas);
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        console.error('❌ Erro ao carregar marcas:', error);
+        // Mantém array vazio em caso de erro
+        this.marcas = [];
+      }
+    });
+  }
+
+  selecionarAba(aba: 'geral' | 'camadas'): void {
+    this.abaAtiva = aba;
+    console.log('Aba ativa:', aba);
   }
 
   carregarProjetos(): void {
@@ -181,18 +189,6 @@ export class CadastroProjetosComponent implements OnInit {
       total_parts_qty: 0,
       lid_parts_qty: 0
     };
-    this.modelos = [];
-  }
-
-  onMarcaChange(): void {
-    // Atualiza lista de modelos baseado na marca selecionada
-    if (this.novoProjeto.brand && this.modelosPorMarca[this.novoProjeto.brand]) {
-      this.modelos = this.modelosPorMarca[this.novoProjeto.brand];
-    } else {
-      this.modelos = [];
-    }
-    // Limpa o modelo selecionado quando marca mudar
-    this.novoProjeto.model = '';
   }
 
   salvarNovoProjeto(): void {

@@ -13,7 +13,8 @@ import {
   listarProjetosEspelhos,
   obterProjetoEspelho,
   obterEstatisticasProjetos,
-  listarProjects
+  listarProjects,
+  obterMarcasUnicas
 } from '../controllers/jiraController.js';
 import { authenticate } from '../middleware/auth.js';
 
@@ -61,6 +62,9 @@ router.get('/projetos-espelhos/:id', authenticate, obterProjetoEspelho);
 
 // Obter estatísticas dos projetos
 router.get('/projetos-espelhos-stats', authenticate, obterEstatisticasProjetos);
+
+// Obter marcas únicas da tabela maestro.project
+router.get('/projects/brands', authenticate, obterMarcasUnicas);
 
 // Listar projetos da tabela maestro.project
 router.get('/projects', authenticate, listarProjects);

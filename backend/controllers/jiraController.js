@@ -2860,3 +2860,36 @@ export const listarProjects = async (req, res) => {
     });
   }
 };
+
+/**
+ * Obtém todas as marcas únicas cadastradas na tabela maestro.project
+ * @route GET /api/jira/projects/brands
+ */
+export const obterMarcasUnicas = async (req, res) => {
+  try {
+    console.log('📋 Buscando marcas únicas do banco de dados...');
+    
+    const query = `
+      SELECT DISTINCT brand 
+      FROM maestro.project 
+      WHERE brand IS NOT NULL AND brand != ''
+      ORDER BY brand ASC
+    `;
+    
+    const result = await pool.query(query);
+    const marcas = result.rows.map(row => row.brand);
+    
+    console.log(`✅ ${marcas.length} marcas únicas encontradas`);
+    
+    return res.status(200).json({
+      success: true,
+      data: marcas
+    });
+  } catch (error) {
+    console.error('❌ Erro ao buscar marcas únicas:', error);
+    return res.status(500).json({
+      success: false,
+      message: `Erro ao buscar marcas: ${error.message}`
+    });
+  }
+};

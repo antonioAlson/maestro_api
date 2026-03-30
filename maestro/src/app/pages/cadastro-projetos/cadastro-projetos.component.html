@@ -36,12 +36,6 @@
       </div>
     </div>
 
-    <!-- Informações de resultado -->
-    <div class="results-info">
-      <span>Total: {{ totalProjetos }} projetos</span>
-      <span *ngIf="filtro">Mostrando resultados para "{{ filtro }}"</span>
-    </div>
-
     <!-- Loading -->
     <div *ngIf="loading" class="loading">
       Carregando projetos...
@@ -151,6 +145,12 @@
         Página {{ pagina }} de {{ totalPaginas }}
       </span>
     </div>
+
+    <!-- Informações de resultado -->
+    <div class="results-info bottom" *ngIf="!loading && !error">
+      <span>Total: {{ totalProjetos }} projetos</span>
+      <span *ngIf="filtro">Mostrando resultados para "{{ filtro }}"</span>
+    </div>
   </main>
 </div>
 
@@ -165,8 +165,27 @@
         <span class="material-symbols-outlined">close</span>
       </button>
     </div>
+
+    <!-- Sistema de Abas no Modal -->
+    <div class="tabs-container-modal">
+      <div class="tabs">
+        <button 
+          class="tab-button"
+          [class.active]="abaAtiva === 'geral'"
+          (click)="selecionarAba('geral')">
+          Geral
+        </button>
+        <button 
+          class="tab-button"
+          [class.active]="abaAtiva === 'camadas'"
+          (click)="selecionarAba('camadas')">
+          Camadas
+        </button>
+      </div>
+    </div>
     
-    <div class="modal-body">
+    <!-- Conteúdo da Aba Geral -->
+    <div class="modal-body" *ngIf="abaAtiva === 'geral'">
       <form class="cadastro-form">
         <div class="form-row">
           <div class="form-group">
@@ -193,14 +212,13 @@
           </div>
         </div>
 
-        <div class="form-row">
+        <div class="form-row brand-model-row">
           <div class="form-group">
             <label for="brand">Marca <span class="required">*</span></label>
             <select 
               id="brand" 
               [(ngModel)]="novoProjeto.brand" 
               name="brand"
-              (change)="onMarcaChange()"
               required>
               <option value="" disabled selected>Selecione a marca</option>
               <option *ngFor="let marca of marcas" [value]="marca">{{ marca }}</option>
@@ -209,14 +227,12 @@
 
           <div class="form-group">
             <label for="model">Modelo</label>
-            <select 
+            <input 
+              type="text" 
               id="model" 
               [(ngModel)]="novoProjeto.model" 
               name="model"
-              [disabled]="!novoProjeto.brand || modelos.length === 0">
-              <option value="" disabled selected>Selecione o modelo</option>
-              <option *ngFor="let modelo of modelos" [value]="modelo">{{ modelo }}</option>
-            </select>
+              placeholder="Ex: Corolla">
           </div>
         </div>
 
@@ -255,8 +271,21 @@
         </div>
       </form>
     </div>
+
+    <!-- Conteúdo da Aba Camadas -->
+    <div class="modal-body" *ngIf="abaAtiva === 'camadas'">
+      <div class="camadas-placeholder">
+        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M12 2 2 7l10 5 10-5-10-5z"/>
+          <path d="M2 17l10 5 10-5"/>
+          <path d="M2 12l10 5 10-5"/>
+        </svg>
+        <h2>Camadas</h2>
+        <p>Conteúdo em desenvolvimento</p>
+      </div>
+    </div>
     
-    <div class="modal-footer">
+    <div class="modal-footer" *ngIf="abaAtiva === 'geral'">
       <div class="footer-hint">
         <span>* Campos obrigatórios</span>
       </div>

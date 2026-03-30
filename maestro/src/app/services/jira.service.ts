@@ -735,6 +735,27 @@ export class JiraService {
     );
   }
 
+  /**
+   * Obtém todas as marcas únicas do banco de dados
+   */
+  obterMarcasUnicas(): Observable<string[]> {
+    console.log('🏷️ [JiraService] Buscando marcas únicas...');
+    
+    const url = `${this.apiUrl}/jira/projects/brands`;
+    
+    return this.http.get<{ success: boolean; data: string[] }>(url).pipe(
+      map(response => response.data || []),
+      tap({
+        next: (marcas) => {
+          console.log(`✅ [JiraService] ${marcas.length} marcas únicas carregadas:`, marcas);
+        },
+        error: (error) => {
+          console.error('❌ [JiraService] Erro ao buscar marcas:', error);
+        }
+      })
+    );
+  }
+
 }
 
 // Interfaces para os novos endpoints
