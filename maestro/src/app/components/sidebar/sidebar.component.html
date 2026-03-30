@@ -3,7 +3,6 @@
   <div class="sidebar-header">
     <div class="logo-container" *ngIf="!isCollapsed">
       <img src="maestro_withe.png" alt="Maestro Logo" class="logo-icon" />
-      <h1 class="logo-text">Maestro</h1>
     </div>
     
     <button class="toggle-btn" (click)="toggleSidebar()" [title]="isCollapsed ? 'Expandir menu' : 'Recolher menu'">
@@ -30,7 +29,25 @@
             [title]="isCollapsed ? item.label : ''"
             (click)="toggleSubmenu(item.label, $event)"
           >
-            <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <!-- Ícone Material Symbol -->
+            <span *ngIf="item.iconType === 'material-symbol'" class="material-symbols-outlined menu-icon">
+              {{ item.icon }}
+            </span>
+            <!-- Ícone com viewBox customizado (fill) -->
+            <svg *ngIf="item.iconType === 'custom-viewbox'" 
+                 class="menu-icon" 
+                 xmlns="http://www.w3.org/2000/svg" 
+                 [attr.viewBox]="item.iconViewBox" 
+                 [attr.fill]="item.iconFill ? 'currentColor' : 'none'">
+              <path [attr.d]="item.icon" />
+            </svg>
+            <!-- Ícone padrão (stroke) -->
+            <svg *ngIf="!item.iconType || item.iconType === 'path'" 
+                 class="menu-icon" 
+                 xmlns="http://www.w3.org/2000/svg" 
+                 fill="none" 
+                 viewBox="0 0 24 24" 
+                 stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" [attr.d]="item.icon" />
             </svg>
             <span class="menu-label" *ngIf="!isCollapsed">{{ item.label }}</span>
@@ -47,7 +64,10 @@
                 routerLinkActive="active"
                 class="submenu-link"
               >
-                <svg class="submenu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <span *ngIf="child.iconType === 'material-symbol'" class="material-symbols-outlined submenu-icon">
+                  {{ child.icon }}
+                </span>
+                <svg *ngIf="!child.iconType || child.iconType === 'path'" class="submenu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" [attr.d]="child.icon" />
                 </svg>
                 <span class="submenu-label">{{ child.label }}</span>
@@ -64,7 +84,25 @@
           class="menu-link"
           [title]="isCollapsed ? item.label : ''"
         >
-          <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <!-- Ícone Material Symbol -->
+          <span *ngIf="item.iconType === 'material-symbol'" class="material-symbols-outlined menu-icon">
+            {{ item.icon }}
+          </span>
+          <!-- Ícone com viewBox customizado (fill) -->
+          <svg *ngIf="item.iconType === 'custom-viewbox'" 
+               class="menu-icon" 
+               xmlns="http://www.w3.org/2000/svg" 
+               [attr.viewBox]="item.iconViewBox" 
+               [attr.fill]="item.iconFill ? 'currentColor' : 'none'">
+            <path [attr.d]="item.icon" />
+          </svg>
+          <!-- Ícone padrão (stroke) -->
+          <svg *ngIf="!item.iconType || item.iconType === 'path'" 
+               class="menu-icon" 
+               xmlns="http://www.w3.org/2000/svg" 
+               fill="none" 
+               viewBox="0 0 24 24" 
+               stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" [attr.d]="item.icon" />
           </svg>
           <span class="menu-label" *ngIf="!isCollapsed">{{ item.label }}</span>

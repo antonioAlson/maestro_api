@@ -32,7 +32,7 @@ interface ConsumoCampos {
 })
 export class ProjetosEspelhosComponent implements OnInit {
   aguardandoProjetoItems: EspelhoItem[] = [];
-  activeAguardandoTab: 'aramida' | 'tenssylon' = 'tenssylon';
+  activeAguardandoTab: 'aramida' | 'tenssylon' = 'aramida';
   isLoadingAguardandoProjeto = false;
   loadErrorAguardandoProjeto = '';
   isGeneratingEspelhos = false;
