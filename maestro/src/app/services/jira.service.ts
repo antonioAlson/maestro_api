@@ -702,6 +702,39 @@ export class JiraService {
     );
   }
 
+  /**
+   * Lista projetos da tabela maestro.project
+   */
+  listarProjects(params: {
+    page?: number;
+    limit?: number;
+    filtro?: string;
+    ordenarPor?: string;
+    ordem?: 'ASC' | 'DESC';
+  } = {}): Observable<ProjectsResponse> {
+    console.log('📋 [JiraService] Listando projetos da tabela maestro.project:', params);
+    
+    const queryParams = new URLSearchParams();
+    if (params.page) queryParams.append('page', params.page.toString());
+    if (params.limit) queryParams.append('limit', params.limit.toString());
+    if (params.filtro) queryParams.append('filtro', params.filtro);
+    if (params.ordenarPor) queryParams.append('ordenarPor', params.ordenarPor);
+    if (params.ordem) queryParams.append('ordem', params.ordem);
+
+    const url = `${this.apiUrl}/jira/projects?${queryParams.toString()}`;
+    
+    return this.http.get<ProjectsResponse>(url).pipe(
+      tap({
+        next: (response) => {
+          console.log('✅ [JiraService] Projetos listados:', response);
+        },
+        error: (error) => {
+          console.error('❌ [JiraService] Erro ao listar projetos:', error);
+        }
+      })
+    );
+  }
+
 }
 
 // Interfaces para os novos endpoints
@@ -757,5 +790,28 @@ export interface EstatisticasProjetosResponse {
       data: string;
       quantidade: string;
     }>;
+  };
+}
+
+// Interface para projetos da tabela maestro.project
+export interface Project {
+  id: number;
+  project: string;
+  material_type: string;
+  brand: string;
+  model: string;
+  roof_config: string;
+  total_parts_qty: number;
+  lid_parts_qty: number;
+}
+
+export interface ProjectsResponse {
+  success: boolean;
+  data: Project[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalItems: number;
+    itemsPerPage: number;
   };
 }

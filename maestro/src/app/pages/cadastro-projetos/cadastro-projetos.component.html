@@ -11,55 +11,27 @@
   <main class="content">
     <!-- Barra de ferramentas -->
     <div class="toolbar">
-      <div class="search-container">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="search-icon">
-          <circle cx="11" cy="11" r="8"></circle>
-          <path d="m21 21-4.35-4.35"></path>
-        </svg>
-        <input 
-          type="text" 
-          [(ngModel)]="filtro" 
-          (keyup.enter)="aplicarFiltro()"
-          placeholder="Buscar por card ID, ordem, título ou usuário..."
-          class="search-input">
-      </div>
-      
-      <div class="toolbar-actions">
-        <button (click)="aplicarFiltro()" class="btn btn-primary">Buscar</button>
-        <button (click)="limparFiltro()" class="btn btn-secondary" *ngIf="filtro">Limpar</button>
-        <button (click)="toggleEstatisticas()" class="btn btn-stats">
-          {{ mostrarEstatisticas ? '📊 Ocultar' : '📊 Estatísticas' }}
-        </button>
-      </div>
-    </div>
-
-    <!-- Estatísticas -->
-    <div class="stats-panel" *ngIf="mostrarEstatisticas && estatisticas">
-      <h2>Estatísticas Gerais</h2>
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-value">{{ estatisticas.geral.total_projetos }}</div>
-          <div class="stat-label">Total de Projetos</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">{{ estatisticas.geral.total_usuarios }}</div>
-          <div class="stat-label">Usuários Ativos</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">{{ estatisticas.geral.total_pecas || '0' }}</div>
-          <div class="stat-label">Total de Peças</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">{{ estatisticas.geral.tempo_medio ? (parseFloat(estatisticas.geral.tempo_medio).toFixed(2) + 's') : 'N/A' }}</div>
-          <div class="stat-label">Tempo Médio</div>
-        </div>
+      <div class="toolbar-left">
+        <button (click)="novoCadastro()" class="btn btn-success">Novo Cadastro</button>
       </div>
 
-      <h3>Top Usuários</h3>
-      <div class="users-list">
-        <div class="user-item" *ngFor="let user of estatisticas.porUsuario.slice(0, 5)">
-          <span class="user-name">{{ user.usuario_nome }}</span>
-          <span class="user-count">{{ user.quantidade }} projetos ({{ user.total_pecas }} peças)</span>
+      <div class="toolbar-right">
+        <div class="search-container">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="search-icon">
+            <circle cx="11" cy="11" r="8"></circle>
+            <path d="m21 21-4.35-4.35"></path>
+          </svg>
+          <input 
+            type="text" 
+            [(ngModel)]="filtro" 
+            (keyup.enter)="aplicarFiltro()"
+            placeholder="Buscar por projeto, material, marca, modelo..."
+            class="search-input">
+        </div>
+        
+        <div class="toolbar-actions">
+          <button (click)="aplicarFiltro()" class="btn btn-primary">Buscar</button>
+          <button (click)="limparFiltro()" class="btn btn-secondary" *ngIf="filtro">Limpar</button>
         </div>
       </div>
     </div>
@@ -85,37 +57,45 @@
       <table class="projetos-table">
         <thead>
           <tr>
-            <th (click)="ordenarPor('card_id')" class="sortable">
-              Card ID
-              <span class="sort-icon" *ngIf="campoOrdenacao === 'card_id'">
+            <th (click)="ordenarPor('project')" class="sortable">
+              Projeto
+              <span class="sort-icon" *ngIf="campoOrdenacao === 'project'">
                 {{ ordem === 'ASC' ? '▲' : '▼' }}
               </span>
             </th>
-            <th (click)="ordenarPor('numero_ordem')" class="sortable">
-              Nº Ordem
-              <span class="sort-icon" *ngIf="campoOrdenacao === 'numero_ordem'">
+            <th (click)="ordenarPor('material_type')" class="sortable">
+              Tipo
+              <span class="sort-icon" *ngIf="campoOrdenacao === 'material_type'">
                 {{ ordem === 'ASC' ? '▲' : '▼' }}
               </span>
             </th>
-            <th>Título</th>
-            <th (click)="ordenarPor('usuario_nome')" class="sortable">
-              Usuário
-              <span class="sort-icon" *ngIf="campoOrdenacao === 'usuario_nome'">
+            <th (click)="ordenarPor('brand')" class="sortable">
+              Marca
+              <span class="sort-icon" *ngIf="campoOrdenacao === 'brand'">
                 {{ ordem === 'ASC' ? '▲' : '▼' }}
               </span>
             </th>
-            <th (click)="ordenarPor('quantidade_pecas')" class="sortable text-center">
-              Qtd. Peças
-              <span class="sort-icon" *ngIf="campoOrdenacao === 'quantidade_pecas'">
+            <th (click)="ordenarPor('model')" class="sortable">
+              Modelo
+              <span class="sort-icon" *ngIf="campoOrdenacao === 'model'">
                 {{ ordem === 'ASC' ? '▲' : '▼' }}
               </span>
             </th>
-            <th class="text-center">Arquivo PDF</th>
-            <th class="text-center">Tamanho</th>
-            <th class="text-center">Status</th>
-            <th (click)="ordenarPor('created_at')" class="sortable">
-              Data/Hora
-              <span class="sort-icon" *ngIf="campoOrdenacao === 'created_at'">
+            <th (click)="ordenarPor('roof_config')" class="sortable">
+              Configuração do Teto
+              <span class="sort-icon" *ngIf="campoOrdenacao === 'roof_config'">
+                {{ ordem === 'ASC' ? '▲' : '▼' }}
+              </span>
+            </th>
+            <th (click)="ordenarPor('total_parts_qty')" class="sortable text-center">
+              Qtd. Total:
+              <span class="sort-icon" *ngIf="campoOrdenacao === 'total_parts_qty'">
+                {{ ordem === 'ASC' ? '▲' : '▼' }}
+              </span>
+            </th>
+            <th (click)="ordenarPor('lid_parts_qty')" class="sortable text-center">
+              Qtd. Tampas:
+              <span class="sort-icon" *ngIf="campoOrdenacao === 'lid_parts_qty'">
                 {{ ordem === 'ASC' ? '▲' : '▼' }}
               </span>
             </th>
@@ -123,24 +103,13 @@
         </thead>
         <tbody>
           <tr *ngFor="let projeto of projetos" class="projeto-row">
-            <td class="card-id">{{ projeto.card_id }}</td>
-            <td class="numero-ordem">{{ projeto.numero_ordem }}</td>
-            <td class="titulo">{{ projeto.titulo }}</td>
-            <td class="usuario">{{ projeto.usuario_nome }}</td>
-            <td class="text-center">
-              <span class="badge badge-quantidade">{{ projeto.quantidade_pecas }}</span>
-            </td>
-            <td class="text-center">
-              <span class="badge" [class.badge-success]="projeto.arquivo_projeto_incluido" 
-                                   [class.badge-default]="!projeto.arquivo_projeto_incluido">
-                {{ projeto.arquivo_projeto_incluido ? '✓ Incluído' : '✗ Não' }}
-              </span>
-            </td>
-            <td class="text-center tamanho">{{ projeto.tamanho_kb }} KB</td>
-            <td class="text-center">
-              <span class="badge badge-status">{{ projeto.status }}</span>
-            </td>
-            <td class="data">{{ formatarData(projeto.created_at) }}</td>
+            <td class="project-id">{{ projeto.project }}</td>
+            <td class="material-type">{{ projeto.material_type }}</td>
+            <td class="brand">{{ projeto.brand }}</td>
+            <td class="model">{{ projeto.model }}</td>
+            <td class="roof-config">{{ projeto.roof_config }}</td>
+            <td class="text-center qty-parts">{{ projeto.total_parts_qty }}</td>
+            <td class="text-center qty-parts">{{ projeto.lid_parts_qty }}</td>
           </tr>
         </tbody>
       </table>
@@ -183,4 +152,131 @@
       </span>
     </div>
   </main>
+</div>
+
+<!-- Modal de Novo Cadastro -->
+<div class="modal-overlay" *ngIf="mostrarModal" (click)="fecharModal()">
+  <div class="modal-container" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div class="header-content">
+        <h2>Novo Cadastro de Projeto</h2>
+      </div>
+      <button class="btn-close" (click)="fecharModal()" type="button">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    
+    <div class="modal-body">
+      <form class="cadastro-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="project">Projeto <span class="required">*</span></label>
+            <input 
+              type="text" 
+              id="project" 
+              [(ngModel)]="novoProjeto.project" 
+              name="project"
+              placeholder="Ex: M00.011226.PF"
+              required>
+          </div>
+
+          <div class="form-group">
+            <label for="material_type">Tipo de Material <span class="required">*</span></label>
+            <select 
+              id="material_type" 
+              [(ngModel)]="novoProjeto.material_type" 
+              name="material_type"
+              required>
+              <option value="" disabled selected>Selecione o tipo de material</option>
+              <option *ngFor="let tipo of tiposMaterial" [value]="tipo">{{ tipo }}</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="brand">Marca <span class="required">*</span></label>
+            <select 
+              id="brand" 
+              [(ngModel)]="novoProjeto.brand" 
+              name="brand"
+              (change)="onMarcaChange()"
+              required>
+              <option value="" disabled selected>Selecione a marca</option>
+              <option *ngFor="let marca of marcas" [value]="marca">{{ marca }}</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="model">Modelo</label>
+            <select 
+              id="model" 
+              [(ngModel)]="novoProjeto.model" 
+              name="model"
+              [disabled]="!novoProjeto.brand || modelos.length === 0">
+              <option value="" disabled selected>Selecione o modelo</option>
+              <option *ngFor="let modelo of modelos" [value]="modelo">{{ modelo }}</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="roof_config">Configuração do Teto</label>
+          <input 
+            type="text" 
+            id="roof_config" 
+            [(ngModel)]="novoProjeto.roof_config" 
+            name="roof_config"
+            placeholder="Ex: Teto Solar Panoramico Opaco Funcional">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="total_parts_qty">Qtd. Total:</label>
+            <input 
+              type="number" 
+              id="total_parts_qty" 
+              [(ngModel)]="novoProjeto.total_parts_qty" 
+              name="total_parts_qty"
+              min="0"
+              placeholder="0">
+          </div>
+
+          <div class="form-group">
+            <label for="lid_parts_qty">Qtd. Tampas:</label>
+            <input 
+              type="number" 
+              id="lid_parts_qty" 
+              [(ngModel)]="novoProjeto.lid_parts_qty" 
+              name="lid_parts_qty"
+              min="0"
+              placeholder="0">
+          </div>
+        </div>
+      </form>
+    </div>
+    
+    <div class="modal-footer">
+      <div class="footer-hint">
+        <span>* Campos obrigatórios</span>
+      </div>
+      <div class="footer-actions">
+        <button 
+          (click)="fecharModal()" 
+          class="btn btn-secondary"
+          type="button"
+          [disabled]="salvandoProjeto">
+          Cancelar
+        </button>
+        <button 
+          (click)="salvarNovoProjeto()" 
+          class="btn btn-primary"
+          type="button"
+          [disabled]="salvandoProjeto">
+          <span *ngIf="!salvandoProjeto">Salvar Projeto</span>
+          <span *ngIf="salvandoProjeto">Salvando...</span>
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
