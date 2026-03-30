@@ -322,12 +322,10 @@
         tbody {
           .projeto-row {
             border-bottom: 1px solid #f1f5f9;
-            transition: all 0.3s ease;
+            transition: background-color 0.2s ease;
 
             &:hover {
               background: linear-gradient(90deg, #f8fafc 0%, #ffffff 100%);
-              transform: scale(1.001);
-              box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
             }
 
             &:last-child {
@@ -645,6 +643,14 @@
         flex-direction: column;
         gap: 0.85rem;
 
+        .specs-title {
+          font-weight: 700;
+          color: #334155;
+          font-size: 0.9rem;
+          letter-spacing: 0.25px;
+          margin-bottom: 0.1rem;
+        }
+
         .form-row {
           display: grid;
           grid-template-columns: 1fr 1fr;
@@ -656,6 +662,10 @@
 
           &.brand-model-row {
             grid-template-columns: 1fr 3fr;
+          }
+
+          &.specs-row {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
           }
         }
 

@@ -1,7 +1,8 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { JiraService, Project, ProjectsResponse } from '../../services/jira.service';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-cadastro-projetos',
@@ -10,7 +11,7 @@ import { JiraService, Project, ProjectsResponse } from '../../services/jira.serv
   templateUrl: './cadastro-projetos.component.html',
   styleUrl: './cadastro-projetos.component.scss'
 })
-export class CadastroProjetosComponent implements OnInit {
+export class CadastroProjetosComponent implements OnInit, OnDestroy {
   projetos: Project[] = [];
   loading: boolean = false;
   error: string = '';
@@ -27,7 +28,7 @@ export class CadastroProjetosComponent implements OnInit {
   ordem: 'ASC' | 'DESC' = 'DESC';
 
   // Controle de abas
-  abaAtiva: 'geral' | 'camadas' = 'geral';
+  abaAtiva: 'geral' | 'especificacao' = 'geral';
 
   // Modal de novo cadastro
   mostrarModal: boolean = false;
@@ -36,6 +37,7 @@ export class CadastroProjetosComponent implements OnInit {
   // Listas para campos do formulário
   tiposMaterial: string[] = ['MANTA', 'TENSYLON'];
   marcas: string[] = [];
+  private projetosSubscription?: Subscription;
   
   // Formulário de novo projeto
   novoProjeto = {
@@ -43,6 +45,9 @@ export class CadastroProjetosComponent implements OnInit {
     material_type: '',
     brand: '',
     model: '',
+    spec_8c: '',
+    spec_9c: '',
+    spec_11c: '',
     roof_config: '',
     total_parts_qty: 0,
     lid_parts_qty: 0
@@ -50,7 +55,8 @@ export class CadastroProjetosComponent implements OnInit {
 
   constructor(
     private jiraService: JiraService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private ngZone: NgZone
   ) {}
 
   ngOnInit(): void {
@@ -76,16 +82,18 @@ export class CadastroProjetosComponent implements OnInit {
     });
   }
 
-  selecionarAba(aba: 'geral' | 'camadas'): void {
+  selecionarAba(aba: 'geral' | 'especificacao'): void {
     this.abaAtiva = aba;
     console.log('Aba ativa:', aba);
   }
 
   carregarProjetos(): void {
+    this.projetosSubscription?.unsubscribe();
     this.loading = true;
     this.error = '';
+    this.cdr.detectChanges();
 
-    this.jiraService.listarProjects({
+    this.projetosSubscription = this.jiraService.listarProjects({
       page: this.pagina,
       limit: this.limite,
       filtro: this.filtro,
@@ -93,20 +101,28 @@ export class CadastroProjetosComponent implements OnInit {
       ordem: this.ordem
     }).subscribe({
       next: (response) => {
-        this.projetos = response.data;
-        this.totalPaginas = response.pagination.totalPages;
-        this.totalProjetos = response.pagination.totalItems;
-        this.loading = false;
-        console.log('✅ Projetos carregados:', this.projetos.length);
-        this.cdr.detectChanges();
+        this.ngZone.run(() => {
+          this.projetos = response.data;
+          this.totalPaginas = response.pagination.totalPages;
+          this.totalProjetos = response.pagination.totalItems;
+          this.loading = false;
+          console.log('✅ Projetos carregados:', this.projetos.length);
+          this.cdr.detectChanges();
+        });
       },
       error: (error) => {
-        this.error = 'Erro ao carregar projetos: ' + (error.error?.message || error.message);
-        this.loading = false;
-        console.error('❌ Erro ao carregar projetos:', error);
-        this.cdr.detectChanges();
+        this.ngZone.run(() => {
+          this.error = 'Erro ao carregar projetos: ' + (error.error?.message || error.message);
+          this.loading = false;
+          console.error('❌ Erro ao carregar projetos:', error);
+          this.cdr.detectChanges();
+        });
       }
     });
+  }
+
+  ngOnDestroy(): void {
+    this.projetosSubscription?.unsubscribe();
   }
 
   aplicarFiltro(): void {
@@ -185,6 +201,9 @@ export class CadastroProjetosComponent implements OnInit {
       material_type: '',
       brand: '',
       model: '',
+      spec_8c: '',
+      spec_9c: '',
+      spec_11c: '',
       roof_config: '',
       total_parts_qty: 0,
       lid_parts_qty: 0

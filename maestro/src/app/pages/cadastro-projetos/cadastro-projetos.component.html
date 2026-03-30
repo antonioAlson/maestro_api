@@ -115,6 +115,12 @@
       <button (click)="limparFiltro()" class="btn btn-primary" *ngIf="filtro">Limpar filtro</button>
     </div>
 
+    <!-- Informações de resultado -->
+    <div class="results-info bottom" *ngIf="!loading && !error">
+      <span>Total: {{ totalProjetos }} projetos</span>
+      <span *ngIf="filtro">Mostrando resultados para "{{ filtro }}"</span>
+    </div>
+
     <!-- Paginação -->
     <div class="pagination" *ngIf="!loading && totalPaginas > 1">
       <button 
@@ -145,12 +151,6 @@
         Página {{ pagina }} de {{ totalPaginas }}
       </span>
     </div>
-
-    <!-- Informações de resultado -->
-    <div class="results-info bottom" *ngIf="!loading && !error">
-      <span>Total: {{ totalProjetos }} projetos</span>
-      <span *ngIf="filtro">Mostrando resultados para "{{ filtro }}"</span>
-    </div>
   </main>
 </div>
 
@@ -177,9 +177,9 @@
         </button>
         <button 
           class="tab-button"
-          [class.active]="abaAtiva === 'camadas'"
-          (click)="selecionarAba('camadas')">
-          Camadas
+          [class.active]="abaAtiva === 'especificacao'"
+          (click)="selecionarAba('especificacao')">
+          Especificacao
         </button>
       </div>
     </div>
@@ -187,7 +187,7 @@
     <!-- Conteúdo da Aba Geral -->
     <div class="modal-body" *ngIf="abaAtiva === 'geral'">
       <form class="cadastro-form">
-        <div class="form-row">
+        <div class="form-row specs-row">
           <div class="form-group">
             <label for="project">Projeto <span class="required">*</span></label>
             <input 
@@ -272,17 +272,43 @@
       </form>
     </div>
 
-    <!-- Conteúdo da Aba Camadas -->
-    <div class="modal-body" *ngIf="abaAtiva === 'camadas'">
-      <div class="camadas-placeholder">
-        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M12 2 2 7l10 5 10-5-10-5z"/>
-          <path d="M2 17l10 5 10-5"/>
-          <path d="M2 12l10 5 10-5"/>
-        </svg>
-        <h2>Camadas</h2>
-        <p>Conteúdo em desenvolvimento</p>
-      </div>
+    <!-- Conteúdo da Aba Especificacao -->
+    <div class="modal-body" *ngIf="abaAtiva === 'especificacao'">
+      <form class="cadastro-form">
+        <label class="specs-title">Metro Linear</label>
+
+        <div class="form-row specs-row">
+          <div class="form-group">
+            <label for="spec_8c">8C</label>
+            <input
+              type="text"
+              id="spec_8c"
+              [(ngModel)]="novoProjeto.spec_8c"
+              name="spec_8c"
+              placeholder="Informe 8C">
+          </div>
+
+          <div class="form-group">
+            <label for="spec_9c">9C</label>
+            <input
+              type="text"
+              id="spec_9c"
+              [(ngModel)]="novoProjeto.spec_9c"
+              name="spec_9c"
+              placeholder="Informe 9C">
+          </div>
+
+          <div class="form-group">
+            <label for="spec_11c">11C</label>
+            <input
+              type="text"
+              id="spec_11c"
+              [(ngModel)]="novoProjeto.spec_11c"
+              name="spec_11c"
+              placeholder="Informe 11C">
+          </div>
+        </div>
+      </form>
     </div>
     
     <div class="modal-footer" *ngIf="abaAtiva === 'geral'">
