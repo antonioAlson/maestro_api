@@ -4,7 +4,7 @@
   min-height: 100vh;
 
   .cadastro-header {
-    margin-bottom: 1.5rem;
+    margin-bottom: 0.85rem;
   }
 
   .header-content {
@@ -20,12 +20,9 @@
 
     h1 {
       margin: 0;
-      font-size: 1.75rem;
+      font-size: 1.5rem;
       font-weight: 600;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      color: #6b7280;
     }
 
     .header-actions {
@@ -40,7 +37,6 @@
       object-fit: contain;
       display: block;
       align-self: center;
-      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
     }
   }
 
