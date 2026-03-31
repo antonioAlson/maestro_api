@@ -17,8 +17,17 @@ const JIRA_URL = process.env.JIRA_URL;
 const EMAIL = process.env.JIRA_EMAIL;
 const API_TOKEN = process.env.JIRA_API_TOKEN;
 
-const JQL = `project = MANTA AND status IN ("A Produzir", "Liberado Engenharia","Em Produção", "Produzido")`;
+const CAMPO_PREVISAO = "customfield_10245";
 
+const JQL = `((project = MANTA AND "fábrica de manta[dropdown]" = COMTEC 
+AND status IN ("A Produzir", "Liberado Engenharia","Em Produção", "Produzido"))  OR (project = TENSYLON AND "fábrica de tensylon[dropdown]" = COMTEC  AND status IN ("A Produzir", "Liberado Engenharia", "Aguardando Acabamento", "Aguardando Autoclave", "Aguardando Corte", "Aguardando montagem","🔴RECEBIDO NÃO LIBERADO")))`;
+//let jql = '(project = MANTA AND "fábrica de manta[dropdown]" = COMTEC AND status IN ("A Produzir", "Liberado Engenharia")) OR (project = TENSYLON AND status IN ("A Produzir", "Liberado Engenharia", "Aguardando Acabamento", "Aguardando Autoclave", "Aguardando Corte", "Aguardando montagem", "🔴RECEBIDO NÃO LIBERADO"))';
+ 
+
+const SITUACOES_VALIDAS = [
+  "⚪️RECEBIDO ENCAMINHADO",
+  "🟢RECEBIDO LIBERADO",
+];
 
 const client = axios.create({
   baseURL: `${JIRA_URL}/rest/api/3`,
@@ -26,8 +35,26 @@ const client = axios.create({
     username: EMAIL,
     password: API_TOKEN,
   },
+  headers: {
+    Accept: "application/json",
+  },
 });
 
+// ================= FUNÇÕES =================
+
+// Próximo dia útil (igual Python)
+function proximoDiaUtil() {
+  let data = new Date();
+  data.setDate(data.getDate() + 1);
+
+  while (data.getDay() === 0 || data.getDay() === 6) {
+    data.setDate(data.getDate() + 1);
+  }
+
+  return data.toISOString().split("T")[0]; // YYYY-MM-DD
+}
+
+// Salvar no banco
 async function salvarOuAtualizar(issue) {
   const query = `
     INSERT INTO maestro.jira_cards (
@@ -69,20 +96,43 @@ async function salvarOuAtualizar(issue) {
   }
 }
 
+// Atualizar previsão no Jira
+async function atualizarPrevisao(issueKey, novaData) {
+  try {
+    await client.put(`/issue/${issueKey}`, {
+      fields: {
+        [CAMPO_PREVISAO]: novaData,
+      },
+    });
+
+    console.log(`✅ ${issueKey} atualizado para ${novaData}`);
+  } catch (err) {
+    console.error(
+      `❌ Erro ao atualizar ${issueKey}:`,
+      err.response?.data || err.message
+    );
+  }
+}
+
+// Buscar issues
 async function buscarIssues(jql, nextPageToken = null) {
   const params = {
     jql,
     maxResults: 100,
-    fields: "issuetype,summary,status,customfield_10039,customfield_11298,customfield_10245",
+    fields:
+      "issuetype,summary,status,customfield_10039,customfield_11298,customfield_10245",
   };
 
   if (nextPageToken) {
     params.nextPageToken = nextPageToken;
   }
-  const response = await client.get("/search/jql", { params });
 
+  const response = await client.get("/search/jql", { params });
+  console.log(response.data)
   return response.data;
 }
+
+// ================= PROCESSAMENTO =================
 
 async function processar() {
   let nextPage = null;
@@ -95,7 +145,6 @@ async function processar() {
       const data = await buscarIssues(JQL, nextPage);
       const issues = data.issues || [];
 
-
       for (const issue of issues) {
         const fields = issue.fields || {};
 
@@ -104,22 +153,31 @@ async function processar() {
         const resumo = fields.summary || "";
         const status = fields.status?.name || "";
 
+        // SITUAÇÃO
         const situacaoRaw = fields.customfield_10039;
         const situacao =
           typeof situacaoRaw === "object"
             ? situacaoRaw?.value
             : situacaoRaw || "";
 
+        // 🔴 FILTRO (igual Python)
+        if (!SITUACOES_VALIDAS.includes(situacao)) {
+          continue;
+        }
+
+        // VEÍCULO
         const veiculoRaw = fields.customfield_11298;
         const veiculo =
           typeof veiculoRaw === "object"
             ? veiculoRaw?.value
             : veiculoRaw || "";
 
+        // PREVISÃO
         const previsaoRaw = fields.customfield_10245;
 
-        console.log(`🔎 Salvando ${key}`);
+        console.log(`🔎 Processando ${key}`);
 
+        // Salvar no banco
         await salvarOuAtualizar({
           key,
           tipo,
@@ -130,6 +188,10 @@ async function processar() {
           previsao: previsaoRaw,
         });
 
+        const novaData = proximoDiaUtil();
+
+        await atualizarPrevisao(key, novaData);
+
         total++;
       }
 
@@ -138,12 +200,14 @@ async function processar() {
 
     } while (true);
 
-    console.log(`🏁 Total sincronizado: ${total}`);
+    console.log(`🏁 Total processado: ${total}`);
 
   } catch (err) {
-    console.error("!---! Erro:", err.message);
+    console.error("❌ Erro geral:", err.message);
   }
 }
+
+// ================= CRON =================
 
 cron.schedule("*/5 * * * *", async () => {
   if (rodando) {
@@ -155,8 +219,19 @@ cron.schedule("*/5 * * * *", async () => {
 
   console.log("\n⏰ Rodando sincronização...");
   await processar();
+
   rodando = false;
+}, {
+  timezone: "America/Sao_Paulo"
 });
 
 // execução inicial
-processar();
+const isDev = process.env.NODE_ENV == "production";
+
+if (isDev) {
+  console.log("Executando em:", new Date().toISOString());
+  processar();
+} else {
+  const msg = `Script Comtec Datas Ambiente: ${process.env.NODE_ENV} | rodar? ${isDev}`;
+  console.log(msg);
+}

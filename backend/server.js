@@ -109,4 +109,5 @@ process.on('uncaughtException', (err) => {
 });
 
 //Carrega a automação de atualização dos cards no banco
-import "./sync_cards_jira.cjs";
+import "./cron_jobs/sync_cards_jira.cjs";
+import "./cron_jobs/update_comtec_cards.cjs";
