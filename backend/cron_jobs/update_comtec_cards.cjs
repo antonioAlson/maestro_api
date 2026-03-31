@@ -209,7 +209,7 @@ async function processar() {
 
 // ================= CRON =================
 
-cron.schedule("*/5 * * * *", async () => {
+cron.schedule("0 8 * * *", async () => {
   if (rodando) {
     console.log("⏳ Ainda em execução, pulando...");
     return;
