@@ -2774,3 +2774,122 @@ export const obterEstatisticasProjetos = async (req, res) => {
     });
   }
 };
+
+/**
+ * Lista projetos da tabela maestro.project com paginação e filtros
+ */
+export const listarProjects = async (req, res) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 10, 
+      filtro = '',
+      ordenarPor = 'id',
+      ordem = 'DESC'
+    } = req.query;
+
+    const offset = (page - 1) * limit;
+    const ordensColunas = ['id', 'project', 'material_type', 'brand', 'model', 'roof_config', 'total_parts_qty', 'lid_parts_qty'];
+    const colunaOrdenacao = ordensColunas.includes(ordenarPor) ? ordenarPor : 'id';
+    const direcaoOrdem = ordem.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+
+    // Query para contar total de registros
+    let countQuery = 'SELECT COUNT(*) FROM maestro.project';
+    let countParams = [];
+
+    // Query para buscar registros
+    let dataQuery = `
+      SELECT 
+        id,
+        project,
+        material_type,
+        brand,
+        model,
+        roof_config,
+        total_parts_qty,
+        lid_parts_qty
+      FROM maestro.project
+    `;
+    let dataParams = [];
+
+    // Aplicar filtro se fornecido
+    if (filtro && filtro.trim() !== '') {
+      const filtroWhere = ` WHERE 
+        LOWER(project) LIKE LOWER($1) OR
+        LOWER(material_type) LIKE LOWER($1) OR
+        LOWER(brand) LIKE LOWER($1) OR
+        LOWER(model) LIKE LOWER($1) OR
+        LOWER(roof_config) LIKE LOWER($1)
+      `;
+      countQuery += filtroWhere;
+      dataQuery += filtroWhere;
+      
+      const filtroParam = `%${filtro}%`;
+      countParams.push(filtroParam);
+      dataParams.push(filtroParam);
+    }
+
+    // Adicionar ordenação e paginação
+    dataQuery += ` ORDER BY ${colunaOrdenacao} ${direcaoOrdem} LIMIT $${dataParams.length + 1} OFFSET $${dataParams.length + 2}`;
+    dataParams.push(limit, offset);
+
+    // Executar queries
+    const [countResult, dataResult] = await Promise.all([
+      pool.query(countQuery, countParams),
+      pool.query(dataQuery, dataParams)
+    ]);
+
+    const total = parseInt(countResult.rows[0].count);
+    const totalPages = Math.ceil(total / limit);
+
+    return res.status(200).json({
+      success: true,
+      data: dataResult.rows,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages,
+        totalItems: total,
+        itemsPerPage: parseInt(limit)
+      }
+    });
+  } catch (error) {
+    console.error('❌ Erro ao listar projetos:', error);
+    return res.status(500).json({
+      success: false,
+      message: `Erro ao listar projetos: ${error.message}`
+    });
+  }
+};
+
+/**
+ * Obtém todas as marcas únicas cadastradas na tabela maestro.project
+ * @route GET /api/jira/projects/brands
+ */
+export const obterMarcasUnicas = async (req, res) => {
+  try {
+    console.log('📋 Buscando marcas únicas do banco de dados...');
+    
+    const query = `
+      SELECT DISTINCT brand 
+      FROM maestro.project 
+      WHERE brand IS NOT NULL AND brand != ''
+      ORDER BY brand ASC
+    `;
+    
+    const result = await pool.query(query);
+    const marcas = result.rows.map(row => row.brand);
+    
+    console.log(`✅ ${marcas.length} marcas únicas encontradas`);
+    
+    return res.status(200).json({
+      success: true,
+      data: marcas
+    });
+  } catch (error) {
+    console.error('❌ Erro ao buscar marcas únicas:', error);
+    return res.status(500).json({
+      success: false,
+      message: `Erro ao buscar marcas: ${error.message}`
+    });
+  }
+};

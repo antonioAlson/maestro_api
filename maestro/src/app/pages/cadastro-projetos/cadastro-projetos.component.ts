@@ -1,7 +1,8 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { JiraService, ProjetoEspelho, EstatisticasProjetosResponse } from '../../services/jira.service';
+import { JiraService, Project, ProjectsResponse } from '../../services/jira.service';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-cadastro-projetos',
@@ -10,8 +11,8 @@ import { JiraService, ProjetoEspelho, EstatisticasProjetosResponse } from '../..
   templateUrl: './cadastro-projetos.component.html',
   styleUrl: './cadastro-projetos.component.scss'
 })
-export class CadastroProjetosComponent implements OnInit {
-  projetos: ProjetoEspelho[] = [];
+export class CadastroProjetosComponent implements OnInit, OnDestroy {
+  projetos: Project[] = [];
   loading: boolean = false;
   error: string = '';
   
@@ -23,26 +24,82 @@ export class CadastroProjetosComponent implements OnInit {
   
   // Filtros e ordenação
   filtro: string = '';
-  campoOrdenacao: string = 'created_at';
+  campoOrdenacao: string = 'id';
   ordem: 'ASC' | 'DESC' = 'DESC';
-  
-  // Estatísticas
-  estatisticas: EstatisticasProjetosResponse['data'] | null = null;
-  mostrarEstatisticas: boolean = false;
 
-  constructor(private jiraService: JiraService) {}
+  // Controle de abas
+  abaAtiva: 'geral' | 'especificacao' = 'geral';
+
+  // Modal de novo cadastro
+  mostrarModal: boolean = false;
+  salvandoProjeto: boolean = false;
+  
+  // Listas para campos do formulário
+  tiposMaterial: string[] = ['MANTA', 'TENSYLON'];
+  marcas: string[] = [];
+  private projetosSubscription?: Subscription;
+  
+  // Formulário de novo projeto
+  novoProjeto = {
+    project: '',
+    material_type: '',
+    brand: '',
+    model: '',
+    spec_8c: '',
+    spec_9c: '',
+    spec_11c: '',
+    metro_quadrado_8c: 0,
+    metro_quadrado_9c: 0,
+    metro_quadrado_11c: 0,
+    quantidade_placas_8c: 0,
+    quantidade_placas_9c: 0,
+    quantidade_placas_11c: 0,
+    roof_config: '',
+    total_parts_qty: 0,
+    lid_parts_qty: 0
+  };
+
+  constructor(
+    private jiraService: JiraService,
+    private cdr: ChangeDetectorRef,
+    private ngZone: NgZone
+  ) {}
 
   ngOnInit(): void {
     console.log('CadastroProjetosComponent inicializado');
     this.carregarProjetos();
-    this.carregarEstatisticas();
+    this.carregarMarcas();
+  }
+
+  carregarMarcas(): void {
+    console.log('🏷️ Carregando marcas do banco de dados...');
+    
+    this.jiraService.obterMarcasUnicas().subscribe({
+      next: (marcas) => {
+        this.marcas = marcas;
+        console.log(`✅ ${marcas.length} marcas carregadas:`, marcas);
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        console.error('❌ Erro ao carregar marcas:', error);
+        // Mantém array vazio em caso de erro
+        this.marcas = [];
+      }
+    });
+  }
+
+  selecionarAba(aba: 'geral' | 'especificacao'): void {
+    this.abaAtiva = aba;
+    console.log('Aba ativa:', aba);
   }
 
   carregarProjetos(): void {
+    this.projetosSubscription?.unsubscribe();
     this.loading = true;
     this.error = '';
+    this.cdr.detectChanges();
 
-    this.jiraService.listarProjetosEspelhos({
+    this.projetosSubscription = this.jiraService.listarProjects({
       page: this.pagina,
       limit: this.limite,
       filtro: this.filtro,
@@ -50,30 +107,28 @@ export class CadastroProjetosComponent implements OnInit {
       ordem: this.ordem
     }).subscribe({
       next: (response) => {
-        this.projetos = response.data;
-        this.totalPaginas = response.pagination.totalPages;
-        this.totalProjetos = response.pagination.total;
-        this.loading = false;
-        console.log('✅ Projetos carregados:', this.projetos.length);
+        this.ngZone.run(() => {
+          this.projetos = response.data;
+          this.totalPaginas = response.pagination.totalPages;
+          this.totalProjetos = response.pagination.totalItems;
+          this.loading = false;
+          console.log('✅ Projetos carregados:', this.projetos.length);
+          this.cdr.detectChanges();
+        });
       },
       error: (error) => {
-        this.error = 'Erro ao carregar projetos: ' + (error.error?.message || error.message);
-        this.loading = false;
-        console.error('❌ Erro ao carregar projetos:', error);
+        this.ngZone.run(() => {
+          this.error = 'Erro ao carregar projetos: ' + (error.error?.message || error.message);
+          this.loading = false;
+          console.error('❌ Erro ao carregar projetos:', error);
+          this.cdr.detectChanges();
+        });
       }
     });
   }
 
-  carregarEstatisticas(): void {
-    this.jiraService.obterEstatisticasProjetos().subscribe({
-      next: (response) => {
-        this.estatisticas = response.data;
-        console.log('✅ Estatísticas carregadas:', this.estatisticas);
-      },
-      error: (error) => {
-        console.error('❌ Erro ao carregar estatísticas:', error);
-      }
-    });
+  ngOnDestroy(): void {
+    this.projetosSubscription?.unsubscribe();
   }
 
   aplicarFiltro(): void {
@@ -118,18 +173,6 @@ export class CadastroProjetosComponent implements OnInit {
     }
   }
 
-  toggleEstatisticas(): void {
-    this.mostrarEstatisticas = !this.mostrarEstatisticas;
-  }
-
-  formatarData(data: string): string {
-    return new Date(data).toLocaleString('pt-BR');
-  }
-
-  formatarDataCurta(data: string): string {
-    return new Date(data).toLocaleDateString('pt-BR');
-  }
-
   getPaginasVisiveis(): number[] {
     const paginas: number[] = [];
     const maxPaginas = 5;
@@ -147,7 +190,56 @@ export class CadastroProjetosComponent implements OnInit {
     return paginas;
   }
 
-  parseFloat(value: string): number {
-    return parseFloat(value) || 0;
+  novoCadastro(): void {
+    console.log('🆕 Novo cadastro solicitado');
+    this.mostrarModal = true;
+    this.limparFormulario();
+  }
+
+  fecharModal(): void {
+    this.mostrarModal = false;
+    this.limparFormulario();
+  }
+
+  limparFormulario(): void {
+    this.novoProjeto = {
+      project: '',
+      material_type: '',
+      brand: '',
+      model: '',
+      spec_8c: '',
+      spec_9c: '',
+      spec_11c: '',
+      metro_quadrado_8c: 0,
+      metro_quadrado_9c: 0,
+      metro_quadrado_11c: 0,
+      quantidade_placas_8c: 0,
+      quantidade_placas_9c: 0,
+      quantidade_placas_11c: 0,
+      roof_config: '',
+      total_parts_qty: 0,
+      lid_parts_qty: 0
+    };
+  }
+
+  salvarNovoProjeto(): void {
+    // Validação básica
+    if (!this.novoProjeto.project || !this.novoProjeto.material_type || !this.novoProjeto.brand) {
+      alert('Por favor, preencha os campos obrigatórios: Projeto, Tipo de Material e Marca');
+      return;
+    }
+
+    this.salvandoProjeto = true;
+    
+    // TODO: Implementar chamada à API para criar novo projeto
+    console.log('Salvando novo projeto:', this.novoProjeto);
+    
+    // Simulação temporária - remover quando implementar a API
+    setTimeout(() => {
+      this.salvandoProjeto = false;
+      this.fecharModal();
+      alert('Projeto cadastrado com sucesso!');
+      this.carregarProjetos(); // Recarregar lista
+    }, 1000);
   }
 }
