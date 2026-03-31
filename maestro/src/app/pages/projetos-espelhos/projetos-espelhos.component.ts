@@ -13,7 +13,9 @@ interface EspelhoItem {
 }
 
 interface EspelhoItemDisplay {
-  text: string;
+  osLine: string;
+  vehicleYearLine: string;
+  projectLine: string;
   fullText: string;
 }
 
@@ -142,22 +144,18 @@ export class ProjetosEspelhosComponent implements OnInit {
   getAguardandoProjetoDisplay(item: EspelhoItem): EspelhoItemDisplay {
     const osNumber = this.getOsNumberForCard(item.id);
     const resumoSemOs = this.removerOsDoResumo(item.resumo, osNumber);
-    const resumo = this.abreviarResumo(resumoSemOs);
     const veiculo = this.abreviarVeiculo(item.veiculo);
     const numeroProjeto = String(item.numeroProjeto || '').trim() || '-';
-    const projetoLabel = numeroProjeto !== '-' ? `Projeto: ${numeroProjeto}` : '-';
+    const projectLine = `Projeto: ${numeroProjeto !== '-' ? numeroProjeto : 'nao informado'}`;
+    const osLine = `OS: ${osNumber}`;
+    const vehicleYearLine = veiculo && veiculo !== '-' ? veiculo : 'Veiculo/ano nao informado';
 
-    const text = [osNumber, veiculo, resumo, projetoLabel]
+    const fullText = [osLine, vehicleYearLine, resumoSemOs, projectLine]
       .map((value) => String(value || '').trim())
-      .filter((value) => value.length > 0 && value !== '-')
+      .filter((value) => value.length > 0)
       .join(' - ');
 
-    const fullText = [osNumber, resumoSemOs, item.veiculo, projetoLabel]
-      .map((value) => String(value || '').trim())
-      .filter((value) => value.length > 0 && value !== '-')
-      .join(' - ');
-
-    return { text, fullText };
+    return { osLine, vehicleYearLine, projectLine, fullText };
   }
 
   private removerOsDoResumo(resumo: string, osNumber: string): string {

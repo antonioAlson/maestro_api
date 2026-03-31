@@ -89,7 +89,11 @@
             [class.marked]="isAguardandoCardMarked(item.id)"
             (click)="onAguardandoCardClick(item, projectFileInput)"
           >
-            {{ getAguardandoProjetoDisplay(item).text }}
+            <ng-container *ngIf="getAguardandoProjetoDisplay(item) as display">
+              <span class="card-os-text">{{ display.osLine }}</span>
+              <span class="card-main-text">{{ display.vehicleYearLine }}</span>
+              <span class="card-project-text">{{ display.projectLine }}</span>
+            </ng-container>
           </li>
         </ul>
         <div *ngIf="!isLoadingAguardandoProjeto && !loadErrorAguardandoProjeto && filteredAguardandoProjetoItems.length === 0" class="board-state">Nenhum card na aba selecionada.</div>
