@@ -424,7 +424,7 @@ async function criarEspelhoPdfDoCodigo(
     height: qrSize
   });
 
-  const revisaoText = 'Fo 21.1 - REV. 1';
+  const revisaoText = 'Fo.22.1 - Rev.0';
   const revisaoSize = 7;
   const revisaoWidth = font.widthOfTextAtSize(revisaoText, revisaoSize);
   page.drawText(revisaoText, {
@@ -665,7 +665,7 @@ async function criarUltimaFolhaAramida(cardData, quantidadeTampas = 1) {
     color: rgb(0.36, 0.36, 0.36)
   });
 
-  page.drawText('Fo 21.1 - REV. 1', {
+  page.drawText('Fo.22.1 - Rev.0', {
     x: width - 335,
     y: footerY - 10,
     size: 7,
@@ -2035,7 +2035,13 @@ async function anexarPdfNoCardJira(cardId, pdfBuffer, fileName, email, apiToken)
 /**
  * Transiciona o status de um card no Jira para "Liberado Engenharia"
  */
-async function transicionarStatusCard(cardId, email, apiToken, statusNome = 'Liberado Engenharia') {
+async function transicionarStatusCard(
+  cardId,
+  email,
+  apiToken,
+  statusNome = 'Liberado Engenharia',
+  statusOrigem = 'A Produzir'
+) {
   const jiraUrl = process.env.JIRA_URL;
 
   if (!jiraUrl || !email || !apiToken) {
@@ -2045,7 +2051,41 @@ async function transicionarStatusCard(cardId, email, apiToken, statusNome = 'Lib
   const auth = Buffer.from(`${email}:${apiToken}`).toString('base64');
 
   try {
-    // 1. Buscar transições disponíveis para o card
+    // 1. Buscar status atual para garantir a transição esperada de origem -> destino.
+    const issueUrl = `${jiraUrl}/rest/api/3/issue/${encodeURIComponent(cardId)}?fields=status`;
+    const issueResponse = await axios.get(issueUrl, {
+      headers: {
+        Authorization: `Basic ${auth}`,
+        Accept: 'application/json'
+      }
+    });
+
+    const statusAtual = String(issueResponse?.data?.fields?.status?.name || '').trim();
+    if (!statusAtual) {
+      throw new Error(`Nao foi possivel identificar o status atual do card ${cardId}`);
+    }
+
+    if (statusAtual.toLowerCase() === statusNome.toLowerCase()) {
+      console.log(`ℹ️ Card ${cardId} ja esta em "${statusNome}"`);
+      return {
+        changed: false,
+        from: statusAtual,
+        to: statusAtual,
+        reason: 'already-in-target'
+      };
+    }
+
+    if (statusAtual.toLowerCase() !== statusOrigem.toLowerCase()) {
+      console.warn(`⚠️ Card ${cardId} em status "${statusAtual}". Esperado "${statusOrigem}" para transicao automatica.`);
+      return {
+        changed: false,
+        from: statusAtual,
+        to: statusAtual,
+        reason: 'unexpected-source-status'
+      };
+    }
+
+    // 2. Buscar transições disponíveis para o card
     const transitionsUrl = `${jiraUrl}/rest/api/3/issue/${encodeURIComponent(cardId)}/transitions`;
     const transitionsResponse = await axios.get(transitionsUrl, {
       headers: {
@@ -2057,9 +2097,11 @@ async function transicionarStatusCard(cardId, email, apiToken, statusNome = 'Lib
     const transitions = transitionsResponse.data.transitions || [];
     console.log(`🔍 Transições disponíveis para ${cardId}:`, transitions.map(t => t.name).join(', '));
 
-    // 2. Encontrar a transição para "Liberado Engenharia"
+    // 3. Encontrar a transição que leva ao status de destino.
     const targetTransition = transitions.find(
-      t => t.name.toLowerCase().includes('liberado') && t.name.toLowerCase().includes('engenharia')
+      (t) => String(t?.to?.name || '').trim().toLowerCase() === statusNome.toLowerCase()
+    ) || transitions.find(
+      (t) => String(t?.name || '').trim().toLowerCase() === statusNome.toLowerCase()
     );
 
     if (!targetTransition) {
@@ -2069,7 +2111,7 @@ async function transicionarStatusCard(cardId, email, apiToken, statusNome = 'Lib
 
     console.log(`✅ Transição encontrada: ${targetTransition.name} (ID: ${targetTransition.id})`);
 
-    // 3. Executar a transição
+    // 4. Executar a transição
     await axios.post(
       transitionsUrl,
       {
@@ -2086,8 +2128,13 @@ async function transicionarStatusCard(cardId, email, apiToken, statusNome = 'Lib
       }
     );
 
-    console.log(`✅ Status do card ${cardId} alterado para "${targetTransition.name}"`);
-    return true;
+    console.log(`✅ Status do card ${cardId} alterado de "${statusAtual}" para "${statusNome}"`);
+    return {
+      changed: true,
+      from: statusAtual,
+      to: statusNome,
+      reason: 'transitioned'
+    };
   } catch (error) {
     console.error(`❌ Erro ao transicionar status do card ${cardId}:`, error.message);
     throw error;
@@ -2519,8 +2566,14 @@ export const gerarEspelhos = async (req, res) => {
 
     // Transicionar status do card para "Liberado Engenharia"
     try {
-      await transicionarStatusCard(cardId, email, apiToken);
-      console.log(`✅ Status do card ${cardId} alterado para "Liberado Engenharia"`);
+      const statusTransition = await transicionarStatusCard(cardId, email, apiToken, 'Liberado Engenharia', 'A Produzir');
+      if (statusTransition.changed) {
+        console.log(`✅ Status do card ${cardId} alterado para "Liberado Engenharia"`);
+      } else if (statusTransition.reason === 'already-in-target') {
+        console.log(`ℹ️ Card ${cardId} ja estava em "Liberado Engenharia"`);
+      } else if (statusTransition.reason === 'unexpected-source-status') {
+        console.warn(`⚠️ Card ${cardId} nao foi movido automaticamente: status atual "${statusTransition.from}"`);
+      }
     } catch (statusError) {
       console.warn(`⚠️ Não foi possível alterar o status do card ${cardId}:`, statusError.message);
       // Não falha a requisição, apenas loga o aviso
