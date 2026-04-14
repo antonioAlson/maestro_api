@@ -54,7 +54,7 @@ export class CadastroProjetosComponent implements OnInit, OnDestroy {
   ordem: 'ASC' | 'DESC' = 'DESC';
 
   // Controle de abas
-  abaAtiva: 'geral' | 'especificacao' = 'geral';
+  abaAtiva: 'geral' | 'especificacao' | 'anexos' = 'geral';
 
   // Modal de novo cadastro
   mostrarModal: boolean = false;
@@ -78,7 +78,7 @@ export class CadastroProjetosComponent implements OnInit, OnDestroy {
   projetoSelecionadoMenu: Project | null = null;
   
   // Listas para campos do formulário
-  tiposMaterial: string[] = ['MANTA', 'TENSYLON'];
+  tiposMaterial: string[] = ['ARAMIDA', 'TENSYLON'];
   marcas: string[] = [];
   private projetosSubscription?: Subscription;
   
@@ -307,7 +307,11 @@ export class CadastroProjetosComponent implements OnInit, OnDestroy {
       }
 
       const upper = raw.toUpperCase();
-      if (upper === 'MANTA' || upper === 'TENSYLON') {
+      if (upper === 'MANTA') {
+        return 'ARAMIDA';
+      }
+
+      if (upper === 'ARAMIDA' || upper === 'TENSYLON') {
         return upper;
       }
 
@@ -332,15 +336,21 @@ export class CadastroProjetosComponent implements OnInit, OnDestroy {
       return Number.isFinite(parsed) ? parsed : 0;
     };
 
+    const materialType = normalizeMaterialType(project.material_type);
+
     return {
       project: toStringValue(project.project),
-      material_type: normalizeMaterialType(project.material_type),
+      material_type: materialType,
       brand: toStringValue(project.brand),
       model: toStringValue(project.model),
-      spec_8c: toStringValue(linearMeters['8C']),
+      spec_8c: toStringValue(materialType === 'TENSYLON'
+        ? (linearMeters['tensylon'] ?? linearMeters['Metro Linear'] ?? linearMeters['8C'])
+        : linearMeters['8C']),
       spec_9c: toStringValue(linearMeters['9C']),
       spec_11c: toStringValue(linearMeters['11C']),
-      metro_quadrado_8c: toNullableNumber(squareMeters['8C']),
+      metro_quadrado_8c: toNullableNumber(materialType === 'TENSYLON'
+        ? (squareMeters['tensylon'] ?? squareMeters['8C'])
+        : squareMeters['8C']),
       metro_quadrado_9c: toNullableNumber(squareMeters['9C']),
       metro_quadrado_11c: toNullableNumber(squareMeters['11C']),
       quantidade_placas_8c: toNumber(plateConsumption['8C']),
@@ -494,9 +504,64 @@ export class CadastroProjetosComponent implements OnInit, OnDestroy {
     });
   }
 
-  selecionarAba(aba: 'geral' | 'especificacao'): void {
+  selecionarAba(aba: 'geral' | 'especificacao' | 'anexos'): void {
     this.abaAtiva = aba;
     console.log('Aba ativa:', aba);
+  }
+
+  onMaterialTypeChange(materialType: string): void {
+    const tipo = String(materialType || '').trim().toUpperCase();
+
+    if (tipo !== 'TENSYLON') {
+      return;
+    }
+
+    // No modo TENSYLON, a aba Placas usa apenas Metro Linear.
+    this.novoProjeto.spec_9c = '';
+    this.novoProjeto.spec_11c = '';
+    this.novoProjeto.metro_quadrado_8c = null;
+    this.novoProjeto.metro_quadrado_9c = null;
+    this.novoProjeto.metro_quadrado_11c = null;
+    this.novoProjeto.quantidade_placas_8c = 0;
+    this.novoProjeto.quantidade_placas_9c = 0;
+    this.novoProjeto.quantidade_placas_11c = 0;
+    this.onMetroLinearChange(this.novoProjeto.spec_8c);
+  }
+
+  normalizeSpecField(field: 'spec_8c' | 'spec_9c' | 'spec_11c'): void {
+    const currentValue = this.novoProjeto[field];
+    const numero = this.parseNumero(currentValue);
+
+    if (numero === null) {
+      this.novoProjeto[field] = '';
+      return;
+    }
+
+    this.novoProjeto[field] = this.formatToThreeDecimals(numero);
+
+    if (field === 'spec_8c') {
+      this.onSpec8cChange(this.novoProjeto[field]);
+      return;
+    }
+
+    if (field === 'spec_9c') {
+      this.onSpec9cChange(this.novoProjeto[field]);
+      return;
+    }
+
+    this.onSpec11cChange(this.novoProjeto[field]);
+  }
+
+  isTipoMaterialTensylon(): boolean {
+    return String(this.novoProjeto.material_type || '').trim().toUpperCase() === 'TENSYLON';
+  }
+
+  private roundToThreeDecimals(value: number): number {
+    return Number(value.toFixed(3));
+  }
+
+  private formatToThreeDecimals(value: number): string {
+    return this.roundToThreeDecimals(value).toFixed(3);
   }
 
   private parseNumero(value: string): number | null {
@@ -531,13 +596,27 @@ export class CadastroProjetosComponent implements OnInit, OnDestroy {
     }
   }
 
+  onMetroLinearChange(valorMm: string): void {
+    const valorMetroLinear = this.parseNumero(valorMm);
+
+    if (valorMetroLinear === null) {
+      this.novoProjeto.spec_8c = '';
+      this.novoProjeto.metro_quadrado_8c = null;
+      return;
+    }
+
+    const valorLinearNormalizado = this.roundToThreeDecimals(valorMetroLinear);
+    this.novoProjeto.spec_8c = this.formatToThreeDecimals(valorLinearNormalizado);
+    this.novoProjeto.metro_quadrado_8c = this.roundToThreeDecimals((valorLinearNormalizado / 1000) * 1.6);
+  }
+
   onSpec8cChange(valorMm: string): void {
     const valorCalculado = this.calcularValorMetroQuadrado(this.parseNumero(valorMm));
 
     if (typeof valorCalculado === 'number') {
-      const metroQuadrado = Number(valorCalculado.toFixed(3));
+      const metroQuadrado = this.roundToThreeDecimals(valorCalculado);
       this.novoProjeto.metro_quadrado_8c = metroQuadrado;
-      this.novoProjeto.quantidade_placas_8c = Number((metroQuadrado / 4.8).toFixed(3));
+      this.novoProjeto.quantidade_placas_8c = this.roundToThreeDecimals(metroQuadrado / 4.8);
       return;
     }
 
@@ -549,9 +628,9 @@ export class CadastroProjetosComponent implements OnInit, OnDestroy {
     const valorCalculado = this.calcularValorMetroQuadrado(this.parseNumero(valorMm));
 
     if (typeof valorCalculado === 'number') {
-      const metroQuadrado = Number(valorCalculado.toFixed(3));
+      const metroQuadrado = this.roundToThreeDecimals(valorCalculado);
       this.novoProjeto.metro_quadrado_9c = metroQuadrado;
-      this.novoProjeto.quantidade_placas_9c = Number((metroQuadrado / 4.8).toFixed(3));
+      this.novoProjeto.quantidade_placas_9c = this.roundToThreeDecimals(metroQuadrado / 4.8);
       return;
     }
 
@@ -563,9 +642,9 @@ export class CadastroProjetosComponent implements OnInit, OnDestroy {
     const valorCalculado = this.calcularValorMetroQuadrado(this.parseNumero(valorMm));
 
     if (typeof valorCalculado === 'number') {
-      const metroQuadrado = Number(valorCalculado.toFixed(3));
+      const metroQuadrado = this.roundToThreeDecimals(valorCalculado);
       this.novoProjeto.metro_quadrado_11c = metroQuadrado;
-      this.novoProjeto.quantidade_placas_11c = Number((metroQuadrado / 4.8).toFixed(3));
+      this.novoProjeto.quantidade_placas_11c = this.roundToThreeDecimals(metroQuadrado / 4.8);
       return;
     }
 
@@ -760,6 +839,33 @@ export class CadastroProjetosComponent implements OnInit, OnDestroy {
 
     this.salvandoProjeto = true;
 
+    const isTensylon = this.isTipoMaterialTensylon();
+    const linearMetersPayload: Record<string, string | number | null> = isTensylon
+      ? {
+          '8C': '',
+          '9C': '',
+          '11C': '',
+          tensylon: this.novoProjeto.spec_8c
+        }
+      : {
+          '8C': this.novoProjeto.spec_8c,
+          '9C': this.novoProjeto.spec_9c,
+          '11C': this.novoProjeto.spec_11c
+        };
+
+    const squareMetersPayload: Record<string, string | number | null> = isTensylon
+      ? {
+          '8C': '',
+          '9C': '',
+          '11C': '',
+          tensylon: this.novoProjeto.metro_quadrado_8c
+        }
+      : {
+          '8C': this.novoProjeto.metro_quadrado_8c,
+          '9C': this.novoProjeto.metro_quadrado_9c,
+          '11C': this.novoProjeto.metro_quadrado_11c
+        };
+
     const payload = {
       ...this.novoProjeto,
       project: this.novoProjeto.project.trim(),
@@ -769,20 +875,12 @@ export class CadastroProjetosComponent implements OnInit, OnDestroy {
       roof_config: this.novoProjeto.roof_config.trim(),
       total_parts_qty: Math.trunc(this.novoProjeto.total_parts_qty),
       lid_parts_qty: Math.max(0, Math.trunc(this.novoProjeto.lid_parts_qty || 0)),
-      linear_meters: {
-        '8C': this.novoProjeto.spec_8c,
-        '9C': this.novoProjeto.spec_9c,
-        '11C': this.novoProjeto.spec_11c
-      },
-      square_meters: {
-        '8C': this.novoProjeto.metro_quadrado_8c,
-        '9C': this.novoProjeto.metro_quadrado_9c,
-        '11C': this.novoProjeto.metro_quadrado_11c
-      },
+      linear_meters: linearMetersPayload,
+      square_meters: squareMetersPayload,
       plate_consumption: {
-        '8C': this.novoProjeto.quantidade_placas_8c,
-        '9C': this.novoProjeto.quantidade_placas_9c,
-        '11C': this.novoProjeto.quantidade_placas_11c
+        '8C': isTensylon ? 0 : this.novoProjeto.quantidade_placas_8c,
+        '9C': isTensylon ? 0 : this.novoProjeto.quantidade_placas_9c,
+        '11C': isTensylon ? 0 : this.novoProjeto.quantidade_placas_11c
       },
       reviews: {
         cutting: this.novoProjeto.flag_corte,

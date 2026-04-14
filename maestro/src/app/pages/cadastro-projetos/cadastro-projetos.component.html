@@ -181,6 +181,12 @@
           (click)="selecionarAba('especificacao')">
           Especificacao
         </button>
+        <button 
+          class="tab-button"
+          [class.active]="abaAtiva === 'anexos'"
+          (click)="selecionarAba('anexos')">
+          Anexos
+        </button>
       </div>
     </div>
     
@@ -202,9 +208,18 @@
 
           <div class="form-group">
             <label for="material_type">Tipo de Material <span class="required">*</span></label>
-            <select 
-              id="material_type" 
-              [(ngModel)]="novoProjeto.material_type" 
+            <input
+              *ngIf="modoModal === 'visualizar'"
+              type="text"
+              id="material_type"
+              [(ngModel)]="novoProjeto.material_type"
+              name="material_type_visualizacao"
+              readonly>
+            <select
+              *ngIf="modoModal !== 'visualizar'"
+              id="material_type"
+              [(ngModel)]="novoProjeto.material_type"
+              (ngModelChange)="onMaterialTypeChange($event)"
               name="material_type"
               required>
               <option value="" disabled>Selecione o tipo de material</option>
@@ -216,9 +231,17 @@
         <div class="form-row brand-model-row">
           <div class="form-group">
             <label for="brand">Marca <span class="required">*</span></label>
-            <select 
-              id="brand" 
-              [(ngModel)]="novoProjeto.brand" 
+            <input
+              *ngIf="modoModal === 'visualizar'"
+              type="text"
+              id="brand"
+              [(ngModel)]="novoProjeto.brand"
+              name="brand_visualizacao"
+              readonly>
+            <select
+              *ngIf="modoModal !== 'visualizar'"
+              id="brand"
+              [(ngModel)]="novoProjeto.brand"
               name="brand"
               required>
               <option value="" disabled>Selecione a marca</option>
@@ -284,122 +307,157 @@
           <span>Placas</span>
         </div>
 
-        <div class="form-row specs-row">
-          <div class="form-group">
-            <label for="spec_8c">8C (mm)</label>
-            <input
-              type="text"
-              id="spec_8c"
-              [(ngModel)]="novoProjeto.spec_8c"
-              (ngModelChange)="onSpec8cChange($event)"
-              name="spec_8c"
-              placeholder="Informe 8C">
+        <ng-container *ngIf="isTipoMaterialTensylon(); else placasDetalhadasTemplate">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="metro_linear">Metro Linear (mm)</label>
+              <input
+                type="text"
+                id="metro_linear"
+                [(ngModel)]="novoProjeto.spec_8c"
+                (ngModelChange)="onMetroLinearChange($event)"
+                (blur)="normalizeSpecField('spec_8c')"
+                name="metro_linear"
+                placeholder="Informe Metro Linear">
+            </div>
+
+            <div class="form-group">
+              <label for="metro_quadrado_tensylon">Metro Quadrado (m²)</label>
+              <input
+                type="number"
+                id="metro_quadrado_tensylon"
+                [(ngModel)]="novoProjeto.metro_quadrado_8c"
+                name="metro_quadrado_tensylon"
+                disabled
+                min="0"
+                step="0.001"
+                placeholder="0.000">
+            </div>
+          </div>
+        </ng-container>
+
+        <ng-template #placasDetalhadasTemplate>
+
+          <div class="form-row specs-row">
+            <div class="form-group">
+              <label for="spec_8c">8C (mm)</label>
+              <input
+                type="text"
+                id="spec_8c"
+                [(ngModel)]="novoProjeto.spec_8c"
+                (ngModelChange)="onSpec8cChange($event)"
+                (blur)="normalizeSpecField('spec_8c')"
+                name="spec_8c"
+                placeholder="Informe 8C">
+            </div>
+
+            <div class="form-group">
+              <label for="spec_9c">9C (mm)</label>
+              <input
+                type="text"
+                id="spec_9c"
+                [(ngModel)]="novoProjeto.spec_9c"
+                (ngModelChange)="onSpec9cChange($event)"
+                (blur)="normalizeSpecField('spec_9c')"
+                name="spec_9c"
+                placeholder="Informe 9C">
+            </div>
+
+            <div class="form-group">
+              <label for="spec_11c">11C (mm)</label>
+              <input
+                type="text"
+                id="spec_11c"
+                [(ngModel)]="novoProjeto.spec_11c"
+                (ngModelChange)="onSpec11cChange($event)"
+                (blur)="normalizeSpecField('spec_11c')"
+                name="spec_11c"
+                placeholder="Informe 11C">
+            </div>
           </div>
 
-          <div class="form-group">
-            <label for="spec_9c">9C (mm)</label>
-            <input
-              type="text"
-              id="spec_9c"
-              [(ngModel)]="novoProjeto.spec_9c"
-              (ngModelChange)="onSpec9cChange($event)"
-              name="spec_9c"
-              placeholder="Informe 9C">
+          <div class="form-row specs-row">
+            <div class="form-group">
+              <label for="metro_quadrado_8c">8C (m²)</label>
+              <input
+                type="number"
+                id="metro_quadrado_8c"
+                [(ngModel)]="novoProjeto.metro_quadrado_8c"
+                name="metro_quadrado_8c"
+                disabled
+                min="0"
+                step="0.01"
+                placeholder="0.00">
+            </div>
+
+            <div class="form-group">
+              <label for="metro_quadrado_9c">9C (m²)</label>
+              <input
+                type="number"
+                id="metro_quadrado_9c"
+                [(ngModel)]="novoProjeto.metro_quadrado_9c"
+                name="metro_quadrado_9c"
+                disabled
+                min="0"
+                step="0.01"
+                placeholder="0.00">
+            </div>
+
+            <div class="form-group">
+              <label for="metro_quadrado_11c">11C (m²)</label>
+              <input
+                type="number"
+                id="metro_quadrado_11c"
+                [(ngModel)]="novoProjeto.metro_quadrado_11c"
+                name="metro_quadrado_11c"
+                disabled
+                min="0"
+                step="0.01"
+                placeholder="0.00">
+            </div>
           </div>
 
-          <div class="form-group">
-            <label for="spec_11c">11C (mm)</label>
-            <input
-              type="text"
-              id="spec_11c"
-              [(ngModel)]="novoProjeto.spec_11c"
-              (ngModelChange)="onSpec11cChange($event)"
-              name="spec_11c"
-              placeholder="Informe 11C">
-          </div>
-        </div>
+          <div class="form-row specs-row">
+            <div class="form-group">
+              <label for="quantidade_placas_8c">8C (un)</label>
+              <input
+                type="number"
+                id="quantidade_placas_8c"
+                [(ngModel)]="novoProjeto.quantidade_placas_8c"
+                name="quantidade_placas_8c"
+                disabled
+                min="0"
+                step="0.001"
+                placeholder="0">
+            </div>
 
-        <div class="form-row specs-row">
-          <div class="form-group">
-            <label for="metro_quadrado_8c">8C (m²)</label>
-            <input
-              type="number"
-              id="metro_quadrado_8c"
-              [(ngModel)]="novoProjeto.metro_quadrado_8c"
-              name="metro_quadrado_8c"
-              disabled
-              min="0"
-              step="0.01"
-              placeholder="0.00">
-          </div>
+            <div class="form-group">
+              <label for="quantidade_placas_9c">9C (un)</label>
+              <input
+                type="number"
+                id="quantidade_placas_9c"
+                [(ngModel)]="novoProjeto.quantidade_placas_9c"
+                name="quantidade_placas_9c"
+                disabled
+                min="0"
+                step="0.001"
+                placeholder="0">
+            </div>
 
-          <div class="form-group">
-            <label for="metro_quadrado_9c">9C (m²)</label>
-            <input
-              type="number"
-              id="metro_quadrado_9c"
-              [(ngModel)]="novoProjeto.metro_quadrado_9c"
-              name="metro_quadrado_9c"
-              disabled
-              min="0"
-              step="0.01"
-              placeholder="0.00">
+            <div class="form-group">
+              <label for="quantidade_placas_11c">11C (un)</label>
+              <input
+                type="number"
+                id="quantidade_placas_11c"
+                [(ngModel)]="novoProjeto.quantidade_placas_11c"
+                name="quantidade_placas_11c"
+                disabled
+                min="0"
+                step="0.001"
+                placeholder="0">
+            </div>
           </div>
-
-          <div class="form-group">
-            <label for="metro_quadrado_11c">11C (m²)</label>
-            <input
-              type="number"
-              id="metro_quadrado_11c"
-              [(ngModel)]="novoProjeto.metro_quadrado_11c"
-              name="metro_quadrado_11c"
-              disabled
-              min="0"
-              step="0.01"
-              placeholder="0.00">
-          </div>
-        </div>
-
-        <div class="form-row specs-row">
-          <div class="form-group">
-            <label for="quantidade_placas_8c">8C (un)</label>
-            <input
-              type="number"
-              id="quantidade_placas_8c"
-              [(ngModel)]="novoProjeto.quantidade_placas_8c"
-              name="quantidade_placas_8c"
-              disabled
-              min="0"
-              step="0.001"
-              placeholder="0">
-          </div>
-
-          <div class="form-group">
-            <label for="quantidade_placas_9c">9C (un)</label>
-            <input
-              type="number"
-              id="quantidade_placas_9c"
-              [(ngModel)]="novoProjeto.quantidade_placas_9c"
-              name="quantidade_placas_9c"
-              disabled
-              min="0"
-              step="0.001"
-              placeholder="0">
-          </div>
-
-          <div class="form-group">
-            <label for="quantidade_placas_11c">11C (un)</label>
-            <input
-              type="number"
-              id="quantidade_placas_11c"
-              [(ngModel)]="novoProjeto.quantidade_placas_11c"
-              name="quantidade_placas_11c"
-              disabled
-              min="0"
-              step="0.001"
-              placeholder="0">
-          </div>
-        </div>
+          </ng-template>
 
         <div class="specs-title-line">
           <span>Projeto</span>
@@ -453,6 +511,15 @@
         </div>
         </fieldset>
       </form>
+    </div>
+
+    <!-- Conteúdo da Aba Anexos -->
+    <div class="modal-body" *ngIf="abaAtiva === 'anexos'">
+      <div class="camadas-placeholder">
+        <h2>Anexos</h2>
+        <p *ngIf="modoModal === 'visualizar'">Nenhum anexo disponível para este projeto.</p>
+        <p *ngIf="modoModal !== 'visualizar'">Área de anexos disponível para novo cadastro e edição.</p>
+      </div>
     </div>
     
     <div class="modal-footer" *ngIf="abaAtiva === 'geral'">

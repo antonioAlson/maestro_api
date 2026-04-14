@@ -2966,16 +2966,30 @@ export const criarProject = async (req, res) => {
       roof_config: String(body.roof_config || '').trim(),
       total_parts_qty: Math.trunc(totalPartsQty),
       lid_parts_qty: Number.isFinite(Number(body.lid_parts_qty)) ? Math.max(0, Math.trunc(Number(body.lid_parts_qty))) : 0,
-      linear_meters: {
-        '8C': parseDecimalOrEmpty(body?.linear_meters?.['8C'] ?? body.spec_8c),
-        '9C': parseDecimalOrEmpty(body?.linear_meters?.['9C'] ?? body.spec_9c),
-        '11C': parseDecimalOrEmpty(body?.linear_meters?.['11C'] ?? body.spec_11c)
-      },
-      square_meters: {
-        '8C': parseDecimalOrEmpty(body?.square_meters?.['8C'] ?? body.metro_quadrado_8c),
-        '9C': parseDecimalOrEmpty(body?.square_meters?.['9C'] ?? body.metro_quadrado_9c),
-        '11C': parseDecimalOrEmpty(body?.square_meters?.['11C'] ?? body.metro_quadrado_11c)
-      },
+      linear_meters: materialType.toUpperCase() === 'TENSYLON'
+        ? {
+            '8C': '',
+            '9C': '',
+            '11C': '',
+            tensylon: parseDecimalOrEmpty(body?.linear_meters?.tensylon ?? body?.linear_meters?.['Metro Linear'] ?? body.spec_8c)
+          }
+        : {
+            '8C': parseDecimalOrEmpty(body?.linear_meters?.['8C'] ?? body.spec_8c),
+            '9C': parseDecimalOrEmpty(body?.linear_meters?.['9C'] ?? body.spec_9c),
+            '11C': parseDecimalOrEmpty(body?.linear_meters?.['11C'] ?? body.spec_11c)
+          },
+      square_meters: materialType.toUpperCase() === 'TENSYLON'
+        ? {
+            '8C': '',
+            '9C': '',
+            '11C': '',
+            tensylon: parseDecimalOrEmpty(body?.square_meters?.tensylon ?? body.metro_quadrado_8c)
+          }
+        : {
+            '8C': parseDecimalOrEmpty(body?.square_meters?.['8C'] ?? body.metro_quadrado_8c),
+            '9C': parseDecimalOrEmpty(body?.square_meters?.['9C'] ?? body.metro_quadrado_9c),
+            '11C': parseDecimalOrEmpty(body?.square_meters?.['11C'] ?? body.metro_quadrado_11c)
+          },
       plate_consumption: {
         '8C': parseDecimalOrEmpty(body?.plate_consumption?.['8C'] ?? body?.plaste_consumption?.['8C'] ?? body?.plates_consumption?.['8C'] ?? body.quantidade_placas_8c),
         '9C': parseDecimalOrEmpty(body?.plate_consumption?.['9C'] ?? body?.plaste_consumption?.['9C'] ?? body?.plates_consumption?.['9C'] ?? body.quantidade_placas_9c),
@@ -3166,16 +3180,30 @@ export const atualizarProject = async (req, res) => {
       roof_config: String(body.roof_config || '').trim(),
       total_parts_qty: Math.trunc(totalPartsQty),
       lid_parts_qty: Number.isFinite(Number(body.lid_parts_qty)) ? Math.max(0, Math.trunc(Number(body.lid_parts_qty))) : 0,
-      linear_meters: {
-        '8C': parseDecimalOrEmpty(body?.linear_meters?.['8C'] ?? body.spec_8c),
-        '9C': parseDecimalOrEmpty(body?.linear_meters?.['9C'] ?? body.spec_9c),
-        '11C': parseDecimalOrEmpty(body?.linear_meters?.['11C'] ?? body.spec_11c)
-      },
-      square_meters: {
-        '8C': parseDecimalOrEmpty(body?.square_meters?.['8C'] ?? body.metro_quadrado_8c),
-        '9C': parseDecimalOrEmpty(body?.square_meters?.['9C'] ?? body.metro_quadrado_9c),
-        '11C': parseDecimalOrEmpty(body?.square_meters?.['11C'] ?? body.metro_quadrado_11c)
-      },
+      linear_meters: materialType.toUpperCase() === 'TENSYLON'
+        ? {
+            '8C': '',
+            '9C': '',
+            '11C': '',
+            tensylon: parseDecimalOrEmpty(body?.linear_meters?.tensylon ?? body?.linear_meters?.['Metro Linear'] ?? body.spec_8c)
+          }
+        : {
+            '8C': parseDecimalOrEmpty(body?.linear_meters?.['8C'] ?? body.spec_8c),
+            '9C': parseDecimalOrEmpty(body?.linear_meters?.['9C'] ?? body.spec_9c),
+            '11C': parseDecimalOrEmpty(body?.linear_meters?.['11C'] ?? body.spec_11c)
+          },
+      square_meters: materialType.toUpperCase() === 'TENSYLON'
+        ? {
+            '8C': '',
+            '9C': '',
+            '11C': '',
+            tensylon: parseDecimalOrEmpty(body?.square_meters?.tensylon ?? body.metro_quadrado_8c)
+          }
+        : {
+            '8C': parseDecimalOrEmpty(body?.square_meters?.['8C'] ?? body.metro_quadrado_8c),
+            '9C': parseDecimalOrEmpty(body?.square_meters?.['9C'] ?? body.metro_quadrado_9c),
+            '11C': parseDecimalOrEmpty(body?.square_meters?.['11C'] ?? body.metro_quadrado_11c)
+          },
       plate_consumption: {
         '8C': parseDecimalOrEmpty(body?.plate_consumption?.['8C'] ?? body?.plaste_consumption?.['8C'] ?? body?.plates_consumption?.['8C'] ?? body.quantidade_placas_8c),
         '9C': parseDecimalOrEmpty(body?.plate_consumption?.['9C'] ?? body?.plaste_consumption?.['9C'] ?? body?.plates_consumption?.['9C'] ?? body.quantidade_placas_9c),
