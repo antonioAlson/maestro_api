@@ -87,11 +87,6 @@ export class SidebarComponent {
       label: 'Usuários',
       children: [
         {
-          icon: 'M8 7a4 4 0 118 0 4 4 0 01-8 0zm-2 10a6 6 0 0112 0v1H6v-1z',
-          label: 'Gerenciar',
-          route: '/users'
-        },
-        {
           icon: 'M12 11c1.657 0 3-1.343 3-3V7a3 3 0 10-6 0v1c0 1.657 1.343 3 3 3zm-6 9v-3a6 6 0 1112 0v3H6z',
           label: 'Acesso',
           route: '/users/acesso'
