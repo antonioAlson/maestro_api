@@ -13,9 +13,12 @@ dotenv.config();
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
+// Confiar no proxy reverso (nginx/Caddy) para X-Forwarded-Proto
+app.set('trust proxy', 1);
+
 // Middlewares
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*', // Configurável via variável de ambiente
+  origin: process.env.CORS_ORIGIN || '*',
   credentials: true,
   exposedHeaders: ['Content-Disposition']
 }));
