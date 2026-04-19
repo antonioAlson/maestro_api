@@ -766,8 +766,7 @@ async function walkFiles(rootPath, currentRelative = '') {
 }
 
 function createServerBaseUrl(req) {
-  const proto = req.get('x-forwarded-proto') || req.protocol;
-  return `${proto}://${req.get('host')}`;
+  return `https://${req.get('host')}`;
 }
 
 function toLocalFileResult(req, cardId, dirName, relativeFilePath) {
