@@ -4,6 +4,8 @@ services:
   maestro-backend:
     build: ./backend
     container_name: maestro_backend
+    volumes:
+      - /var/lib/orquestra/ops:/var/lib/orquestra/ops
     ports:
       - "3000:3000"
     restart: always
