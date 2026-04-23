@@ -16,21 +16,6 @@ if (!SECRET || SECRET.length !== 64) {
   throw new Error('JIRA_TOKEN_SECRET must be 64 hex characters (32 bytes)');
 }
 
-const encrypt = (text) => {
-  if (!text) return null;
-
-  const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv(
-    ALGORITHM,
-    Buffer.from(SECRET, 'hex'),
-    iv
-  );
-  let encrypted = cipher.update(text, 'utf8');
-  encrypted = Buffer.concat([encrypted, cipher.final()]);
-
-  return iv.toString('hex') + ':' + encrypted.toString('hex');
-};
-
 const decrypt = (text) => {
   try {
     if (!text) return null;
@@ -391,14 +376,17 @@ export const updateUser = async (req, res) => {
     const updatedEmail = email?.trim() || currentUser.email;
 
     // validar email se veio
-    if (email) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        return res.status(400).json({
-          success: false,
-          message: 'E-mail inválido'
-        });
-      }
+
+    const emailExists = await query(
+      'SELECT id FROM maestro.users WHERE email = $1 AND id <> $2',
+      [updatedEmail, userId]
+    );
+
+    if (emailExists.rows.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'E-mail já cadastrado'
+      });
     }
 
     // senha opcional
@@ -416,7 +404,12 @@ export const updateUser = async (req, res) => {
     // jira token opcional
     let updatedJiraToken = currentUser.api_token;
     if (jiraToken !== undefined) {
-      updatedJiraToken = jiraToken ? encrypt(jiraToken) : null;
+      if (jiraToken === '') {
+        // NÃO ALTERA
+        updatedJiraToken = currentUser.api_token;
+      } else {
+        updatedJiraToken = encrypt(jiraToken);
+      }
     }
 
     /**
