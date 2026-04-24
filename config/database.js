@@ -55,6 +55,53 @@ async function runCompatibilityQuery(sql, label) {
   }
 }
 
+async function ensureFileStorageTable() {
+  await runCompatibilityQuery(`
+    CREATE TABLE IF NOT EXISTS maestro.file_storage (
+      id            uuid PRIMARY KEY,
+      original_name text,
+      stored_name   text,
+      path          text,
+      mime_type     text,
+      size          bigint,
+      created_at    timestamp DEFAULT now()
+    )
+  `, 'maestro.file_storage');
+}
+
+async function ensureCuttingPlanAttachmentTable() {
+  await runCompatibilityQuery(`
+    CREATE TABLE IF NOT EXISTS maestro.cutting_plan_attachment (
+      id               serial PRIMARY KEY,
+      cutting_plan_id  int  NOT NULL,
+      file_id          uuid NOT NULL,
+      type             text NOT NULL,
+      created_at       timestamp DEFAULT now(),
+      CONSTRAINT fk_cp   FOREIGN KEY (cutting_plan_id) REFERENCES maestro.cutting_plan(id) ON DELETE CASCADE,
+      CONSTRAINT fk_file FOREIGN KEY (file_id)         REFERENCES maestro.file_storage(id) ON DELETE CASCADE,
+      CONSTRAINT unique_attachment UNIQUE (cutting_plan_id, type)
+    )
+  `, 'maestro.cutting_plan_attachment');
+}
+
+async function ensureCuttingPlansTable() {
+  await runCompatibilityQuery(`
+    CREATE TABLE IF NOT EXISTS maestro.cutting_plan (
+      id               SERIAL PRIMARY KEY,
+      project_id       INTEGER NOT NULL REFERENCES maestro.project(id) ON DELETE CASCADE,
+      plate_width      NUMERIC(8,3) NOT NULL DEFAULT 0,
+      plate_height     NUMERIC(8,3) NOT NULL DEFAULT 0,
+      linear_meters    JSONB NOT NULL DEFAULT '{}'::jsonb,
+      square_meters    JSONB NOT NULL DEFAULT '{}'::jsonb,
+      notes            TEXT NOT NULL DEFAULT '',
+      plate_consumption JSONB NOT NULL DEFAULT '{}'::jsonb,
+      attachments      JSONB NOT NULL DEFAULT '[]'::jsonb,
+      reviews          JSONB NOT NULL DEFAULT '{"cutting": false, "labeling": false, "ki_Layout": false, "nesting_report": false, "folder_template": false}'::jsonb,
+      created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `, 'maestro.cutting_plan');
+}
+
 // Garante colunas esperadas para versões antigas do banco.
 export async function ensureDatabaseCompatibility() {
   await runCompatibilityQuery(`
@@ -86,6 +133,10 @@ export async function ensureDatabaseCompatibility() {
     ALTER TABLE IF EXISTS maestro.project
     ADD COLUMN IF NOT EXISTS reviews JSONB NOT NULL DEFAULT '{"cutting": false, "labeling": false, "ki_Layout": false, "nesting_report": false, "folder_template": false}'::jsonb;
   `, 'maestro.project.reviews');
+
+  await ensureFileStorageTable();
+  await ensureCuttingPlansTable();
+  await ensureCuttingPlanAttachmentTable();
 }
 
 export default pool;

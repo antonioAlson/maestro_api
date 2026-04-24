@@ -5,7 +5,6 @@ import os from 'os';
 import QRCode from 'qrcode';
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
-import ImageModule from 'docxtemplater-image-module-free';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -2148,36 +2147,12 @@ async function gerarEspelhoDocx(templatePath, cardData) {
   const templateBuffer = await fs.promises.readFile(templatePath);
   const zip = new PizZip(templateBuffer);
 
-  // Converte placeholder textual para placeholder de imagem do QR.
-  const mainDocument = zip.file('word/document.xml');
-  if (mainDocument) {
-    const xml = mainDocument.asText();
-    const patchedXml = xml.replace(/\{\{\s*QR_CODE\s*\}\}/g, '{{%QR_CODE}}');
-    if (patchedXml !== xml) {
-      zip.file('word/document.xml', patchedXml);
-    }
-  }
-
-  const imageModule = new ImageModule({
-    centered: false,
-    getImage(tagValue) {
-      const value = String(tagValue || '');
-      const base64 = value.includes(',') ? value.split(',')[1] : value;
-      return Buffer.from(base64, 'base64');
-    },
-    getSize() {
-      return [110, 110];
-    }
-  });
+  const SENTINEL = '__QR_CODE_IMAGE__';
 
   const doc = new Docxtemplater(zip, {
-    modules: [imageModule],
     paragraphLoop: true,
     linebreaks: true,
-    delimiters: {
-      start: '{{',
-      end: '}}'
-    },
+    delimiters: { start: '{{', end: '}}' },
     parser(tag) {
       const cleanTag = String(tag || '').trim();
       const key = cleanTag.startsWith('%') ? cleanTag.slice(1).trim() : cleanTag;
@@ -2202,11 +2177,6 @@ async function gerarEspelhoDocx(templatePath, cardData) {
     cardData.numeroOrdem
   ].filter((value) => String(value || '').trim().length > 0).join('\n');
 
-  const qrCodeDataUrl = await QRCode.toDataURL(qrPayload || cardData.id || '', {
-    margin: 1,
-    width: 260
-  });
-
   doc.render({
     MODELO_VEICULO: cardData.modeloVeiculo,
     TIPO_TETO: cardData.tipoTeto,
@@ -2215,10 +2185,43 @@ async function gerarEspelhoDocx(templatePath, cardData) {
     DATA_PROJETO: dataAtual,
     QUANTIDADE_PECAS: '',
     NUMERO_ORDEM: cardData.numeroOrdem,
-    QR_CODE: qrCodeDataUrl
+    QR_CODE: SENTINEL
   });
 
-  return doc.getZip().generate({ type: 'nodebuffer' });
+  const renderedZip = doc.getZip();
+
+  // Gera QR code como PNG e injeta diretamente no ZIP do docx
+  const qrPngBuffer = await QRCode.toBuffer(qrPayload || cardData.id || '', {
+    margin: 1,
+    width: 260,
+    type: 'png'
+  });
+
+  renderedZip.file('word/media/qrcode.png', qrPngBuffer);
+
+  const relsPath = 'word/_rels/document.xml.rels';
+  const relsFile = renderedZip.file(relsPath);
+  if (relsFile) {
+    let relsXml = relsFile.asText();
+    const imgRel = '<Relationship Id="rIdQRCode" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/qrcode.png"/>';
+    relsXml = relsXml.replace('</Relationships>', imgRel + '</Relationships>');
+    renderedZip.file(relsPath, relsXml);
+  }
+
+  const docFile = renderedZip.file('word/document.xml');
+  if (docFile) {
+    const emuSize = 110 * 9525; // 110px em EMUs
+    const drawingXml = `<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${emuSize}" cy="${emuSize}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="100" name="QRCode"/><wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="100" name="QRCode"/><pic:cNvPicPr><a:picLocks noChangeAspect="1"/></pic:cNvPicPr></pic:nvPicPr><pic:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rIdQRCode"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${emuSize}" cy="${emuSize}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+
+    const docXml = docFile.asText();
+    const updatedXml = docXml.replace(
+      /<w:p\b[^>]*>[\s\S]*?__QR_CODE_IMAGE__[\s\S]*?<\/w:p>/,
+      drawingXml
+    );
+    renderedZip.file('word/document.xml', updatedXml);
+  }
+
+  return renderedZip.generate({ type: 'nodebuffer' });
 }
 
 async function runCommand(command, args) {
