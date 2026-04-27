@@ -157,7 +157,7 @@ export const getTensylonProjects = async (req, res) => {
 //
 
 // Retry wrapper for unstable I/O and external API calls.
-async function retry(fn, attempts = 3, delayMs = 300) {
+async function retry(fn, attempts = 3, delayMs = 800) {
   let lastErr;
   for (let i = 0; i < attempts; i++) {
     try { return await fn(); } catch (err) {
@@ -357,7 +357,7 @@ export const generateOS = async (req, res) => {
         phase = 'envio do PDF ao Jira';
         attachmentIds = await retry(
           () => attachToJiraIssue(req.user.id, entry.jiraKey, `${folderName}.pdf`, Buffer.from(singleBytes)),
-          3, 500
+          3, 800
         );
         log.push(`  [OK] PDF anexado ao card Jira (IDs: ${attachmentIds.join(', ')})`);
 
