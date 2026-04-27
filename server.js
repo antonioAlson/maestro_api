@@ -23,7 +23,7 @@ app.set('trust proxy', 1);
 app.use(cors({
   origin: process.env.CORS_ORIGIN || '*',
   credentials: true,
-  exposedHeaders: ['Content-Disposition', 'X-OS-Failures']
+  exposedHeaders: ['Content-Disposition', 'X-OS-Failures', 'X-OS-Field-Warnings']
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

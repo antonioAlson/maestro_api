@@ -198,6 +198,94 @@ export async function updateJiraIssueFields(userId, issueKey, fields) {
 }
 
 /**
+ * Fetch all fields defined in the Jira instance.
+ * Useful for discovering the correct customfield_XXXXX IDs.
+ *
+ * @param {number} userId
+ * @returns {Promise<Array<{id:string, name:string, type:string, custom:boolean}>>}
+ */
+export async function fetchJiraFields(userId) {
+  const jiraUrl = process.env.JIRA_URL;
+  if (!jiraUrl) throw new Error('JIRA_URL não configurado');
+
+  const { email, apiToken } = await getCredentials(userId);
+  const authHeader = `Basic ${Buffer.from(`${email}:${apiToken}`).toString('base64')}`;
+
+  const resp = await axios.get(`${jiraUrl}/rest/api/3/field`, {
+    headers: { Authorization: authHeader, Accept: 'application/json' },
+    timeout: 15_000,
+  });
+
+  return (resp.data || []).map(f => ({
+    id:     f.id,
+    name:   f.name,
+    type:   f.schema?.type || '',
+    custom: !!f.custom,
+  }));
+}
+
+/**
+ * Transition a Jira issue to a target status via the transitions API.
+ * Only transitions if the current status matches sourceStatus.
+ * Returns silently (no throw) when the card is already at the target
+ * or in an unexpected source status — callers decide whether to treat
+ * those cases as errors.
+ *
+ * @param {number} userId
+ * @param {string} issueKey     - e.g. "MANTA-31516"
+ * @param {string} targetStatus - e.g. "Liberado Engenharia"
+ * @param {string} sourceStatus - only transition when current status matches this
+ * @returns {Promise<{ changed: boolean, from: string, to: string, reason: string }>}
+ */
+export async function transitionJiraIssue(userId, issueKey, targetStatus, sourceStatus) {
+  const jiraUrl = process.env.JIRA_URL;
+  if (!jiraUrl) throw new Error('JIRA_URL não configurado');
+
+  const { email, apiToken } = await getCredentials(userId);
+  const authHeader = `Basic ${Buffer.from(`${email}:${apiToken}`).toString('base64')}`;
+
+  const issueResp = await axios.get(
+    `${jiraUrl}/rest/api/3/issue/${encodeURIComponent(issueKey)}?fields=status`,
+    { headers: { Authorization: authHeader, Accept: 'application/json' }, timeout: 15_000 }
+  );
+
+  const currentStatus = String(issueResp.data?.fields?.status?.name || '').trim();
+
+  if (currentStatus.toLowerCase() === targetStatus.toLowerCase()) {
+    return { changed: false, from: currentStatus, to: currentStatus, reason: 'already-in-target' };
+  }
+
+  if (currentStatus.toLowerCase() !== sourceStatus.toLowerCase()) {
+    return { changed: false, from: currentStatus, to: currentStatus, reason: 'unexpected-source-status' };
+  }
+
+  const transitionsUrl = `${jiraUrl}/rest/api/3/issue/${encodeURIComponent(issueKey)}/transitions`;
+  const transResp = await axios.get(transitionsUrl, {
+    headers: { Authorization: authHeader, Accept: 'application/json' },
+    timeout: 15_000,
+  });
+
+  const transitions = transResp.data.transitions || [];
+  const target = transitions.find(
+    t => String(t?.to?.name || '').trim().toLowerCase() === targetStatus.toLowerCase()
+  ) || transitions.find(
+    t => String(t?.name || '').trim().toLowerCase() === targetStatus.toLowerCase()
+  );
+
+  if (!target) {
+    throw new Error(`Transição "${targetStatus}" não disponível para o card ${issueKey}`);
+  }
+
+  await axios.post(
+    transitionsUrl,
+    { transition: { id: target.id } },
+    { headers: { Authorization: authHeader, 'Content-Type': 'application/json', Accept: 'application/json' }, timeout: 15_000 }
+  );
+
+  return { changed: true, from: currentStatus, to: targetStatus, reason: 'transitioned' };
+}
+
+/**
  * Force-expire all cache entries for a user (e.g. after token update).
  * @param {number} userId
  */

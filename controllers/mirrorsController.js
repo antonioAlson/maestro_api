@@ -6,7 +6,7 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import QRCode from 'qrcode';
 
 import JSZip from 'jszip';
-import { fetchJiraIssues, fetchAramidaIssues, fetchTensylonIssues, attachToJiraIssue, updateJiraIssueFields, deleteJiraAttachment } from '../services/jiraService.js';
+import { fetchJiraIssues, fetchAramidaIssues, fetchTensylonIssues, attachToJiraIssue, updateJiraIssueFields, deleteJiraAttachment, fetchJiraFields, transitionJiraIssue } from '../services/jiraService.js';
 import { fetchAllProjects, fetchProjectsByIds } from '../services/mirrorProjectRepository.js';
 import { classifyAll } from '../services/classifierService.js';
 
@@ -185,6 +185,7 @@ export const generateOS = async (req, res) => {
     const rowMap = new Map(dbRows.map(r => [r.id, r]));
     const zip = new JSZip();
     const failures = [];
+    const fieldWarnings = [];
 
     for (const entry of projects) {
       const proj = rowMap.get(Number(entry.id));
@@ -228,40 +229,92 @@ export const generateOS = async (req, res) => {
           }
         }
 
-        // Attach PDF to Jira — throws on any failure.
+        // ── Phase: attach PDF to Jira (fatal — rolls back on failure) ─────────
         phase = 'envio do PDF ao Jira';
         attachmentIds = await attachToJiraIssue(req.user.id, entry.jiraKey, `${folderName}.pdf`, Buffer.from(singleBytes));
         console.log(`[Mirrors] Anexado ${folderName}.pdf ao card ${entry.jiraKey}`);
 
-        // Update square meters custom fields — throws on any failure.
-        phase = 'atualização dos campos m²';
+        // ── Phase: update m² custom fields (non-fatal — PDF stays attached) ───
+        // Build sqm from cutting_plans, skipping empty and zero values.
         const sqm = {};
         for (const plan of (proj.cutting_plans || [])) {
           for (const [k, v] of Object.entries(plan.square_meters || {})) {
-            if (v !== '' && v != null && sqm[k] === undefined) {
-              const n = parseFloat(String(v).replace(',', '.'));
-              if (Number.isFinite(n)) sqm[k] = n;
-            }
+            if (sqm[k] !== undefined) continue;
+            const n = parseFloat(String(v ?? '').replace(',', '.'));
+            if (Number.isFinite(n) && n > 0) sqm[k] = n;
           }
         }
 
         const isTensylon = String(proj.material_type || '').toUpperCase() === 'TENSYLON';
         const sqmFields = {};
 
+        // Jira stores these as text fields in Brazilian format ("998,2").
+        // Sending a JS float would be silently ignored — must send a string.
+        const toJiraStr = n => String(n).replace('.', ',');
+
         if (isTensylon) {
-          if (sqm.tensylon != null) {
-            sqmFields.customfield_13636 = sqm.tensylon;
-            sqmFields.customfield_13634 = sqm.tensylon;
-          }
+          const f = process.env.JIRA_FIELD_SQM_TENSYLON;
+          if (f && sqm.tensylon != null) sqmFields[f] = toJiraStr(sqm.tensylon);
         } else {
-          if (sqm['8C'] != null)  { sqmFields.customfield_13625 = sqm['8C'];  sqmFields.customfield_13631 = sqm['8C'];  }
-          if (sqm['9C'] != null)  { sqmFields.customfield_13626 = sqm['9C'];  sqmFields.customfield_13632 = sqm['9C'];  }
-          if (sqm['11C'] != null) { sqmFields.customfield_13627 = sqm['11C']; sqmFields.customfield_13633 = sqm['11C']; }
+          if (sqm['8C'] != null) {
+            const v = toJiraStr(sqm['8C']);
+            sqmFields.customfield_13625 = v;
+            sqmFields.customfield_13633 = v;
+          }else{
+            sqmFields.customfield_13625 = 0;
+            sqmFields.customfield_13633 = 0;
+          }
+          if (sqm['9C'] != null) {
+            const v = toJiraStr(sqm['9C']);
+            sqmFields.customfield_13626 = v;
+            sqmFields.customfield_13632 = v;
+          }else{
+            sqmFields.customfield_13626 = 0;
+            sqmFields.customfield_13632 = 0;
+          }
+          if (sqm['11C'] != null) {
+            const v = toJiraStr(sqm['11C']);
+            sqmFields.customfield_13627 = v;
+            sqmFields.customfield_13631 = v;
+          }else{
+            sqmFields.customfield_13627 = 0;
+            sqmFields.customfield_13631 = 0;
+
+          }
         }
 
         if (Object.keys(sqmFields).length) {
-          await updateJiraIssueFields(req.user.id, entry.jiraKey, sqmFields);
-          console.log(`[Mirrors] Campos m² atualizados no card ${entry.jiraKey}`);
+          try {
+            await updateJiraIssueFields(req.user.id, entry.jiraKey, sqmFields);
+            console.log(`[Mirrors] Campos m² atualizados no card ${entry.jiraKey}:`, sqmFields);
+          } catch (fieldErr) {
+            const fieldMsg = fieldErr?.response?.data
+              ? JSON.stringify(fieldErr.response.data)
+              : fieldErr.message;
+            console.warn(`[Mirrors] Falha ao atualizar campos m² no card ${entry.jiraKey}:`, fieldMsg);
+            fieldWarnings.push({
+              jiraKey: entry.jiraKey,
+              os_number: meta.osNumber,
+              message: fieldMsg,
+              fields: Object.keys(sqmFields),
+            });
+          }
+        } else {
+          console.log(`[Mirrors] Nenhum valor de m² disponível para o card ${entry.jiraKey} — campos não atualizados`);
+        }
+
+        // ── Phase: transition card to "Liberado Engenharia" (non-fatal) ────────
+        try {
+          const tr = await transitionJiraIssue(req.user.id, entry.jiraKey, 'Liberado Engenharia', 'A Produzir');
+          if (tr.changed) {
+            console.log(`[Mirrors] Card ${entry.jiraKey} movido para "Liberado Engenharia"`);
+          } else if (tr.reason === 'already-in-target') {
+            console.log(`[Mirrors] Card ${entry.jiraKey} já estava em "Liberado Engenharia"`);
+          } else {
+            console.warn(`[Mirrors] Card ${entry.jiraKey} não movido — status atual: "${tr.from}"`);
+          }
+        } catch (trErr) {
+          console.warn(`[Mirrors] Falha ao mover card ${entry.jiraKey} para "Liberado Engenharia":`, trErr.message);
         }
 
       } catch (err) {
@@ -289,13 +342,21 @@ export const generateOS = async (req, res) => {
       return res.status(422).json({ success: false, message: 'Todas as OS falharam ao ser geradas.', failures });
     }
 
-    // Include a plain-text error log inside the ZIP when there are partial failures.
-    if (failures.length > 0) {
-      const lines = [
-        `Relatório de falhas — ${new Date().toLocaleString('pt-BR')}`,
-        '',
-        ...failures.map(f => `OS ${f.os_number} (${f.jiraKey})\n  Fase: ${f.phase}\n  Erro: ${f.message}`),
-      ];
+    // Include a plain-text error log inside the ZIP when there are any failures or warnings.
+    if (failures.length > 0 || fieldWarnings.length > 0) {
+      const lines = [`Relatório — ${new Date().toLocaleString('pt-BR')}`, ''];
+      if (failures.length > 0) {
+        lines.push('=== FALHAS (OS não geradas) ===');
+        failures.forEach(f => lines.push(`OS ${f.os_number} (${f.jiraKey})\n  Fase: ${f.phase}\n  Erro: ${f.message}`));
+        lines.push('');
+      }
+      if (fieldWarnings.length > 0) {
+        lines.push('=== AVISOS (PDF gerado, mas campos m² não atualizados no Jira) ===');
+        lines.push('Verifique os IDs dos campos em: GET /api/mirrors/jira-fields');
+        fieldWarnings.forEach(w => lines.push(
+          `OS ${w.os_number} (${w.jiraKey})\n  Campos: ${w.fields.join(', ')}\n  Erro: ${w.message}`
+        ));
+      }
       zip.file('ERROS.txt', lines.join('\n'));
     }
 
@@ -303,9 +364,30 @@ export const generateOS = async (req, res) => {
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="OS-${Date.now()}.zip"`);
     res.setHeader('X-OS-Failures', JSON.stringify(failures));
+    res.setHeader('X-OS-Field-Warnings', JSON.stringify(fieldWarnings));
     return res.end(zipBuffer);
   } catch (error) {
     console.error('[Mirrors] generateOS error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─── GET /api/mirrors/jira-fields ───────────────────────────────────────────
+//
+// Returns all Jira custom fields with id, name, and type.
+// Use this to find the correct customfield_XXXXX IDs for m² fields.
+// Optional query param ?search=<term> to filter by name.
+//
+export const getJiraFieldsList = async (req, res) => {
+  try {
+    const allFields = await fetchJiraFields(req.user.id);
+    const { search = '' } = req.query;
+    const filtered = search
+      ? allFields.filter(f => f.name.toLowerCase().includes(search.toLowerCase()))
+      : allFields;
+    return res.json({ success: true, data: { fields: filtered, total: filtered.length } });
+  } catch (error) {
+    console.error('[Mirrors] getJiraFieldsList error:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };

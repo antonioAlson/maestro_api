@@ -3,8 +3,12 @@ require("dotenv").config();
 const axios = require("axios");
 const cron = require("node-cron");
 const { Pool } = require("pg");
+
 let rodando = false;
 
+// ==========================
+// DATABASE
+// ==========================
 const pool = new Pool({
   user: process.env.DB_USER || "postgres",
   host: process.env.DB_HOST || "localhost",
@@ -13,12 +17,14 @@ const pool = new Pool({
   port: process.env.DB_PORT || 5432,
 });
 
+// ==========================
+// JIRA CONFIG
+// ==========================
 const JIRA_URL = process.env.JIRA_URL;
 const EMAIL = process.env.JIRA_EMAIL;
 const API_TOKEN = process.env.JIRA_API_TOKEN;
 
 const JQL = `project = MANTA AND status IN ("A Produzir", "Liberado Engenharia","Em Produção", "Produzido")`;
-
 
 const client = axios.create({
   baseURL: `${JIRA_URL}/rest/api/3`,
@@ -28,6 +34,9 @@ const client = axios.create({
   },
 });
 
+// ==========================
+// SALVAR / UPDATE
+// ==========================
 async function salvarOuAtualizar(issue) {
   const query = `
     INSERT INTO maestro.jira_cards (
@@ -38,9 +47,10 @@ async function salvarOuAtualizar(issue) {
       situacao,
       veiculo,
       previsao,
+      project,
       last_updated_at
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
     ON CONFLICT (key)
     DO UPDATE SET
       tipo = EXCLUDED.tipo,
@@ -49,6 +59,7 @@ async function salvarOuAtualizar(issue) {
       situacao = EXCLUDED.situacao,
       veiculo = EXCLUDED.veiculo,
       previsao = EXCLUDED.previsao,
+      project = EXCLUDED.project,
       last_updated_at = NOW();
   `;
 
@@ -60,41 +71,49 @@ async function salvarOuAtualizar(issue) {
     issue.situacao,
     issue.veiculo,
     issue.previsao || null,
+    issue.project || null,
   ];
 
   try {
     await pool.query(query, values);
   } catch (err) {
-    console.error(`❌ Erro ao salvar ${issue.key}:`, err.message);
+    console.error(`Erro ao salvar ${issue.key}:`, err.message);
   }
 }
 
+// ==========================
+// BUSCAR ISSUES
+// ==========================
 async function buscarIssues(jql, nextPageToken = null) {
   const params = {
     jql,
     maxResults: 100,
-    fields: "issuetype,summary,status,customfield_10039,customfield_11298,customfield_10245",
+    fields:
+      "issuetype,summary,status,customfield_10039,customfield_11298,customfield_10245,customfield_11353",
   };
 
   if (nextPageToken) {
     params.nextPageToken = nextPageToken;
   }
+
   const response = await client.get("/search/jql", { params });
 
   return response.data;
 }
 
+// ==========================
+// PROCESSAMENTO
+// ==========================
 async function processar() {
   let nextPage = null;
   let total = 0;
 
-  console.log("🚀 Sync iniciada...");
+  console.log(" Sync Jira iniciada...");
 
   try {
     do {
       const data = await buscarIssues(JQL, nextPage);
       const issues = data.issues || [];
-
 
       for (const issue of issues) {
         const fields = issue.fields || {};
@@ -104,22 +123,41 @@ async function processar() {
         const resumo = fields.summary || "";
         const status = fields.status?.name || "";
 
+        // ==========================
+        //  SITUAÇÃO
+        // ==========================
         const situacaoRaw = fields.customfield_10039;
         const situacao =
           typeof situacaoRaw === "object"
             ? situacaoRaw?.value
             : situacaoRaw || "";
 
+        // ==========================
+        //  VEÍCULO
+        // ==========================
         const veiculoRaw = fields.customfield_11298;
         const veiculo =
           typeof veiculoRaw === "object"
             ? veiculoRaw?.value
             : veiculoRaw || "";
 
+        // ==========================
+        //  PREVISÃO
+        // ==========================
         const previsaoRaw = fields.customfield_10245;
 
-        console.log(`🔎 Salvando ${key}`);
+        // ==========================
+        // 🧱 PROJETO (NOVO)
+        // ==========================
+        const projectRaw = fields.customfield_11353;
+        const project =
+          typeof projectRaw === "object"
+            ? projectRaw?.value
+            : projectRaw || "";
 
+        // ==========================
+        //  SALVAR
+        // ==========================
         await salvarOuAtualizar({
           key,
           tipo,
@@ -128,6 +166,7 @@ async function processar() {
           situacao,
           veiculo,
           previsao: previsaoRaw,
+          project,
         });
 
         total++;
@@ -141,36 +180,45 @@ async function processar() {
     console.log(`🏁 Total sincronizado: ${total}`);
 
   } catch (err) {
-    console.error("!---! Erro:", err.message);
+    console.error("❌ Erro geral:", err.message);
   }
 }
 
-cron.schedule("*/5 * * * *", async () => {
-  if (rodando) {
-    console.log("⏳ Ainda em execução, pulando...");
-    return;
+// ==========================
+// CRON
+// ==========================
+cron.schedule(
+  "*/5 * * * *",
+  async () => {
+    if (rodando) {
+      console.log("⏳ Ainda em execução, pulando...");
+      return;
+    }
+
+    rodando = true;
+
+    console.log("\n⏰ Rodando sincronização...");
+    await processar();
+
+    rodando = false;
+  },
+  {
+    timezone: "America/Sao_Paulo",
   }
+);
 
-  rodando = true;
+// ==========================
+//  EXECUÇÃO INICIAL
+// ==========================
+const isProd = process.env.NODE_ENV === "production";
 
-  console.log("\n⏰ Rodando sincronização...");
-  await processar();
-
-  rodando = false;
-}, {
-  timezone: "America/Sao_Paulo"
-});
-
-// execução inicial
-const isDev = process.env.NODE_ENV == "production";
-
-
-if (isDev) {
+if (isProd) {
   console.log("Executando em:", new Date().toISOString());
   processar();
 } else {
   console.log("################");
-  const msg = `Script Sync Jira Cards Ambiente: ${process.env.NODE_ENV} | rodar? ${isDev}`;
-  console.log(msg);
+  console.log(
+    `Script Sync Jira Cards Ambiente: ${process.env.NODE_ENV} | rodar? ${isProd}`
+  );
   console.log("---------------");
 }
