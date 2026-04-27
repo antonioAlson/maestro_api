@@ -143,12 +143,32 @@ export async function attachToJiraIssue(userId, issueKey, filename, pdfBuffer) {
   const formData = new FormData();
   formData.append('file', new Blob([pdfBuffer], { type: 'application/pdf' }), filename);
 
-  await axios.post(`${jiraUrl}/rest/api/3/issue/${issueKey}/attachments`, formData, {
+  const resp = await axios.post(`${jiraUrl}/rest/api/3/issue/${issueKey}/attachments`, formData, {
     headers: {
       Authorization: authHeader,
       'X-Atlassian-Token': 'no-check',
     },
     timeout: 30_000,
+  });
+  return (resp.data || []).map(a => a.id).filter(Boolean);
+}
+
+/**
+ * Delete a Jira attachment by ID (used for rollback on partial failure).
+ * @param {number} userId
+ * @param {string|number} attachmentId
+ * @returns {Promise<void>}
+ */
+export async function deleteJiraAttachment(userId, attachmentId) {
+  const jiraUrl = process.env.JIRA_URL;
+  if (!jiraUrl) throw new Error('JIRA_URL não configurado');
+
+  const { email, apiToken } = await getCredentials(userId);
+  const authHeader = `Basic ${Buffer.from(`${email}:${apiToken}`).toString('base64')}`;
+
+  await axios.delete(`${jiraUrl}/rest/api/3/attachment/${attachmentId}`, {
+    headers: { Authorization: authHeader },
+    timeout: 15_000,
   });
 }
 

@@ -6,7 +6,7 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import QRCode from 'qrcode';
 
 import JSZip from 'jszip';
-import { fetchJiraIssues, fetchAramidaIssues, fetchTensylonIssues, attachToJiraIssue, updateJiraIssueFields } from '../services/jiraService.js';
+import { fetchJiraIssues, fetchAramidaIssues, fetchTensylonIssues, attachToJiraIssue, updateJiraIssueFields, deleteJiraAttachment } from '../services/jiraService.js';
 import { fetchAllProjects, fetchProjectsByIds } from '../services/mirrorProjectRepository.js';
 import { classifyAll } from '../services/classifierService.js';
 
@@ -184,58 +184,125 @@ export const generateOS = async (req, res) => {
     // repeated IDs (different jiraKey/os_number) each produce their own pages.
     const rowMap = new Map(dbRows.map(r => [r.id, r]));
     const zip = new JSZip();
+    const failures = [];
 
     for (const entry of projects) {
       const proj = rowMap.get(Number(entry.id));
       if (!proj) continue;
+
       const meta = { osNumber: String(entry.os_number || entry.osNumber || '') };
       const folderName = `OS-${meta.osNumber || entry.jiraKey}`;
-      const folder = zip.folder(folderName);
+      let attachmentIds = [];
+      let phase = 'geração do PDF';
 
-      // Build individual PDF for this OS entry.
-      const singlePdf = await PDFDocument.create();
-      await appendFirstPage(singlePdf, proj, meta, 1);
-      await appendInfoProjectPages(singlePdf, proj);
-      await appendLastPage(singlePdf, proj, meta);
-      const singleBytes = await singlePdf.save();
+      try {
+        const folder = zip.folder(folderName);
 
-      // Add PDF to ZIP folder.
-      folder.file(`${folderName}.pdf`, Buffer.from(singleBytes));
+        // Build individual PDF for this OS entry.
+        const singlePdf = await PDFDocument.create();
+        await appendFirstPage(singlePdf, proj, meta, 1);
+        await appendInfoProjectPages(singlePdf, proj);
+        await appendLastPage(singlePdf, proj, meta);
+        const singleBytes = await singlePdf.save();
 
-      // Add .txt attachments with XXXXX → OS number substitution.
-      const seenFileIds = new Set();
-      for (const plan of (proj.cutting_plans || [])) {
-        for (const att of (plan.attachments || [])) {
-          if (!att.file?.name?.toLowerCase().endsWith('.txt')) continue;
-          if (seenFileIds.has(att.file.id)) continue;
-          seenFileIds.add(att.file.id);
-          if (!att.file.path || !fs.existsSync(att.file.path)) continue;
-          try {
-            const content = await fs.promises.readFile(att.file.path, 'utf8');
-            folder.file(
-              `${meta.osNumber}-${att.file.name}`,
-              content.replace(/XXXXX/g, meta.osNumber),
-            );
-          } catch (err) {
-            console.warn(`[Mirrors] Falha ao ler txt ${att.file.name}:`, err.message);
+        // Add PDF to ZIP folder.
+        folder.file(`${folderName}.pdf`, Buffer.from(singleBytes));
+
+        // Add .txt attachments with XXXXX → OS number substitution.
+        const seenFileIds = new Set();
+        for (const plan of (proj.cutting_plans || [])) {
+          for (const att of (plan.attachments || [])) {
+            if (!att.file?.name?.toLowerCase().endsWith('.txt')) continue;
+            if (seenFileIds.has(att.file.id)) continue;
+            seenFileIds.add(att.file.id);
+            if (!att.file.path || !fs.existsSync(att.file.path)) continue;
+            try {
+              const content = await fs.promises.readFile(att.file.path, 'utf8');
+              folder.file(
+                `${meta.osNumber}-${att.file.name}`,
+                content.replace(/XXXXX/g, meta.osNumber),
+              );
+            } catch (err) {
+              console.warn(`[Mirrors] Falha ao ler txt ${att.file.name}:`, err.message);
+            }
           }
         }
-      }
 
-      // Attach individual PDF to Jira.
-      const filename = `${folderName}.pdf`;
-      try {
-        await attachToJiraIssue(req.user.id, entry.jiraKey, filename, Buffer.from(singleBytes));
-        console.log(`[Mirrors] Anexado ${filename} ao card ${entry.jiraKey}`);
+        // Attach PDF to Jira — throws on any failure.
+        phase = 'envio do PDF ao Jira';
+        attachmentIds = await attachToJiraIssue(req.user.id, entry.jiraKey, `${folderName}.pdf`, Buffer.from(singleBytes));
+        console.log(`[Mirrors] Anexado ${folderName}.pdf ao card ${entry.jiraKey}`);
+
+        // Update square meters custom fields — throws on any failure.
+        phase = 'atualização dos campos m²';
+        const sqm = {};
+        for (const plan of (proj.cutting_plans || [])) {
+          for (const [k, v] of Object.entries(plan.square_meters || {})) {
+            if (v !== '' && v != null && sqm[k] === undefined) {
+              const n = parseFloat(String(v).replace(',', '.'));
+              if (Number.isFinite(n)) sqm[k] = n;
+            }
+          }
+        }
+
+        const isTensylon = String(proj.material_type || '').toUpperCase() === 'TENSYLON';
+        const sqmFields = {};
+
+        if (isTensylon) {
+          if (sqm.tensylon != null) {
+            sqmFields.customfield_13636 = sqm.tensylon;
+            sqmFields.customfield_13634 = sqm.tensylon;
+          }
+        } else {
+          if (sqm['8C'] != null)  { sqmFields.customfield_13625 = sqm['8C'];  sqmFields.customfield_13631 = sqm['8C'];  }
+          if (sqm['9C'] != null)  { sqmFields.customfield_13626 = sqm['9C'];  sqmFields.customfield_13632 = sqm['9C'];  }
+          if (sqm['11C'] != null) { sqmFields.customfield_13627 = sqm['11C']; sqmFields.customfield_13633 = sqm['11C']; }
+        }
+
+        if (Object.keys(sqmFields).length) {
+          await updateJiraIssueFields(req.user.id, entry.jiraKey, sqmFields);
+          console.log(`[Mirrors] Campos m² atualizados no card ${entry.jiraKey}`);
+        }
+
       } catch (err) {
-        console.warn(`[Mirrors] Falha ao anexar ${filename} ao card ${entry.jiraKey}:`, err.message);
-      }
+        // Rollback: remove any PDF already attached to Jira for this entry.
+        for (const attId of attachmentIds) {
+          try {
+            await deleteJiraAttachment(req.user.id, attId);
+            console.log(`[Mirrors] Rollback: anexo ${attId} removido do card ${entry.jiraKey}`);
+          } catch (delErr) {
+            console.warn(`[Mirrors] Falha no rollback do anexo ${attId}:`, delErr.message);
+          }
+        }
 
+        // Remove this entry's folder from the ZIP.
+        zip.remove(folderName);
+
+        failures.push({ jiraKey: entry.jiraKey, os_number: meta.osNumber, phase, message: err.message });
+        console.warn(`[Mirrors] Falha na OS ${entry.jiraKey} (fase: ${phase}):`, err.message);
+      }
+    }
+
+    // If every entry failed, return a structured error instead of an empty ZIP.
+    const successCount = projects.length - failures.length;
+    if (successCount === 0) {
+      return res.status(422).json({ success: false, message: 'Todas as OS falharam ao ser geradas.', failures });
+    }
+
+    // Include a plain-text error log inside the ZIP when there are partial failures.
+    if (failures.length > 0) {
+      const lines = [
+        `Relatório de falhas — ${new Date().toLocaleString('pt-BR')}`,
+        '',
+        ...failures.map(f => `OS ${f.os_number} (${f.jiraKey})\n  Fase: ${f.phase}\n  Erro: ${f.message}`),
+      ];
+      zip.file('ERROS.txt', lines.join('\n'));
     }
 
     const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="OS-${Date.now()}.zip"`);
+    res.setHeader('X-OS-Failures', JSON.stringify(failures));
     return res.end(zipBuffer);
   } catch (error) {
     console.error('[Mirrors] generateOS error:', error);

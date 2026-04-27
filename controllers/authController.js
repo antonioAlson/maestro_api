@@ -348,6 +348,75 @@ export const updateUserAccess = async (req, res) => {
 };
 
 
+/**
+ * =========================
+ * UPDATE SELF (senha + token Jira)
+ * =========================
+ */
+export const updateMe = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { currentPassword, newPassword, jiraToken } = req.body;
+
+    const existing = await query('SELECT * FROM maestro.users WHERE id = $1', [userId]);
+    if (!existing.rows.length) {
+      return res.status(404).json({ success: false, message: 'Usuário não encontrado.' });
+    }
+    const currentUser = existing.rows[0];
+
+    const setClauses = [];
+    const values = [];
+    let idx = 1;
+    let jiraTokenChanged = false;
+
+    if (newPassword !== undefined && newPassword !== '') {
+      if (!currentPassword) {
+        return res.status(400).json({ success: false, message: 'Informe a senha atual para alterar a senha.' });
+      }
+      const isValid = await bcrypt.compare(currentPassword, currentUser.password);
+      if (!isValid) {
+        return res.status(400).json({ success: false, message: 'Senha atual incorreta.' });
+      }
+      if (newPassword.length < 6) {
+        return res.status(400).json({ success: false, message: 'A nova senha deve ter no mínimo 6 caracteres.' });
+      }
+      setClauses.push(`password = $${idx++}`);
+      values.push(await bcrypt.hash(newPassword, 10));
+    }
+
+    if (jiraToken !== undefined && jiraToken !== '') {
+      setClauses.push(`api_token = $${idx++}`);
+      values.push(encrypt(jiraToken));
+      jiraTokenChanged = true;
+    }
+
+    if (!setClauses.length) {
+      return res.status(400).json({ success: false, message: 'Nenhuma alteração enviada.' });
+    }
+
+    setClauses.push(`updated_at = CURRENT_TIMESTAMP`);
+    values.push(userId);
+
+    const result = await query(
+      `UPDATE maestro.users SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING id, name, email, menu_access, created_at, updated_at`,
+      values
+    );
+
+    if (jiraTokenChanged) invalidateCache(userId);
+
+    res.json({ success: true, message: 'Configurações atualizadas com sucesso.', data: { user: mapUser(result.rows[0]) } });
+
+  } catch (error) {
+    console.error('Erro updateMe:', error);
+    res.status(500).json({ success: false, message: 'Erro ao atualizar configurações.' });
+  }
+};
+
+/**
+ * =========================
+ * UPDATE USER (ADMIN)
+ * =========================
+ */
 export const updateUser = async (req, res) => {
   try {
     const userId = Number(req.params.id);
